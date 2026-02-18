@@ -1,0 +1,292 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #fafafa;
+  color: #222;
+}
+
+/* --- Landing --- */
+
+.landing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  gap: 12px;
+}
+
+.landing h1 {
+  font-size: 2.5rem;
+}
+
+.landing form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 500px;
+}
+
+.landing textarea {
+  padding: 12px;
+  font-size: 1rem;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.landing textarea:focus {
+  outline: none;
+  border-color: #555;
+}
+
+.landing button {
+  padding: 12px;
+  font-size: 1rem;
+  background: #222;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.landing button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* --- Tree Canvas --- */
+
+.tree-canvas {
+  padding: 32px;
+  min-height: 100vh;
+}
+
+.objective-title {
+  font-size: 1.5rem;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.loading {
+  text-align: center;
+  color: #888;
+  margin-bottom: 16px;
+}
+
+.tree-container {
+  display: flex;
+  justify-content: center;
+}
+
+/* --- Tree Node --- */
+
+.tree-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.tree-node-label {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-align: center;
+  max-width: 160px;
+  word-wrap: break-word;
+  transition: box-shadow 0.15s;
+}
+
+.tree-node-label.root {
+  background: #222;
+  color: #fff;
+  font-weight: bold;
+  cursor: default;
+  max-width: 300px;
+}
+
+.tree-node-label.unanswered {
+  background: #e8e8e8;
+  color: #666;
+}
+
+.tree-node-label.unanswered:hover {
+  box-shadow: 0 0 0 2px #888;
+}
+
+.tree-node-label.answered {
+  background: #d4edda;
+  color: #2d5e3a;
+}
+
+.tree-node-label.answered:hover {
+  box-shadow: 0 0 0 2px #6abf7b;
+}
+
+.tree-node-label.selected {
+  box-shadow: 0 0 0 2px #4a90d9;
+}
+
+.answer-badge {
+  margin-left: 6px;
+  font-size: 0.8rem;
+}
+
+.tree-children {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 2px solid #ddd;
+  margin-top: 4px;
+}
+
+/* --- Question Panel (overlay) --- */
+
+.panel-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.question-panel {
+  background: #fff;
+  border-radius: 12px;
+  padding: 32px;
+  max-width: 500px;
+  width: 90%;
+  position: relative;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.panel-close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: #888;
+}
+
+.panel-aspect {
+  display: inline-block;
+  background: #eee;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 12px;
+}
+
+.panel-question {
+  font-size: 1.1rem;
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.suggestion-chip {
+  padding: 10px 14px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.95rem;
+  text-align: left;
+  transition: border-color 0.15s;
+}
+
+.suggestion-chip:hover {
+  border-color: #4a90d9;
+  background: #f0f6ff;
+}
+
+.free-text {
+  display: flex;
+  gap: 8px;
+}
+
+.free-text input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+.free-text input:focus {
+  outline: none;
+  border-color: #555;
+}
+
+.free-text button {
+  padding: 10px 16px;
+  background: #222;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.free-text button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.panel-answered {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panel-answer-label {
+  font-size: 0.85rem;
+  color: #888;
+}
+
+.panel-answer-text {
+  padding: 10px 14px;
+  background: #d4edda;
+  border-radius: 8px;
+  color: #2d5e3a;
+}
+
+.elaborate-btn {
+  padding: 10px 16px;
+  background: #4a90d9;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.elaborate-btn:hover {
+  background: #3a7bc8;
+}
