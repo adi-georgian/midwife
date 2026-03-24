@@ -5,14 +5,18 @@ class AspectNode(BaseModel):
     id: str
     aspect: str
     question: str
+    summary: str = ""
+    importance: float = 0.5
     suggestions: list[str]
     answer: str | None = None
+    is_ghost: bool = False
     children: list["AspectNode"] = []
 
 
 class SessionState(BaseModel):
     session_id: str
     objective: str
+    mode: str = ""
     root: AspectNode
 
     def find_node(self, node_id: str) -> AspectNode | None:
@@ -41,17 +45,36 @@ class SessionState(BaseModel):
                 return [node] + path
         return None
 
+    def find_parent(self, node_id: str) -> AspectNode | None:
+        return self._find_parent(self.root, node_id)
+
+    def _find_parent(self, node: AspectNode, node_id: str) -> AspectNode | None:
+        for child in node.children:
+            if child.id == node_id:
+                return node
+            found = self._find_parent(child, node_id)
+            if found is not None:
+                return found
+        return None
+
 
 # --- Request / Response schemas ---
 
 
 class CreateSessionRequest(BaseModel):
     objective: str
+    mode: str = ""          # e.g. "logistics", "brainstorming", "creative", "problem_solving", "decision", "research"
+    help_level: str = ""
+    prior_knowledge: str = ""
+    already_planned: str = ""
+    constraints: str = ""
+    knowledge_level: str = ""
 
 
 class CreateSessionResponse(BaseModel):
     session_id: str
     aspects: list[AspectNode]
+    discourse_name: str
 
 
 class AnswerRequest(BaseModel):
@@ -66,3 +89,59 @@ class TreeResponse(BaseModel):
     session_id: str
     objective: str
     root: AspectNode
+
+
+class PrefetchRequest(BaseModel):
+    aspect_ids: list[str]
+
+
+class PrefetchResponse(BaseModel):
+    status: str
+
+
+class RevealResponse(BaseModel):
+    children: list[AspectNode]
+
+
+class ChatMessage(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage]
+    aspect_context: dict | None = None  # {aspect, question, summary}
+
+
+class LabelChatRequest(BaseModel):
+    messages: list[ChatMessage]
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    suggested_answer: str | None = None
+    suggested_answers: list[str] = []
+    new_aspects: list[dict] = []
+    updated_aspect: str | None = None
+    updated_question: str | None = None
+
+
+class AddAspectRequest(BaseModel):
+    aspect: str
+    question: str = ""
+    suggestions: list[str] = []
+    generate: bool = False
+
+
+class MoveAspectRequest(BaseModel):
+    new_parent_id: str
+
+
+class GenerateAspectsRequest(BaseModel):
+    label: str
+    details: str = ""
+
+
+class RecontextualizeResponse(BaseModel):
+    updated_ancestors: list[dict] = []
+    spinoff_suggestions: list[dict] = []

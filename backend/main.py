@@ -1,15 +1,27 @@
 import uuid
 
+import anthropic as _anthropic
 from fastapi import FastAPI, HTTPException
+from google.genai.errors import ClientError, ServerError
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.interview import generate_questions
+from backend.interview import generate_chat_label, generate_chat_reply, generate_discourse_name, generate_questions, recontextualize_ancestors
 from backend.models import (
+    AddAspectRequest,
     AspectNode,
     AnswerRequest,
+    ChatRequest,
+    ChatResponse,
     CreateSessionRequest,
     CreateSessionResponse,
     ElaborateResponse,
+    GenerateAspectsRequest,
+    LabelChatRequest,
+    MoveAspectRequest,
+    PrefetchRequest,
+    PrefetchResponse,
+    RecontextualizeResponse,
+    RevealResponse,
     SessionState,
     TreeResponse,
 )
@@ -27,38 +39,80 @@ app.add_middleware(
 store = SessionStore()
 
 
+def collect_answered_aspects(node: AspectNode) -> list[dict]:
+    """Return all answered non-root nodes as {aspect, question, answer} dicts."""
+    result = []
+    if node.answer and node.id != "root":
+        result.append({"aspect": node.aspect, "question": node.question, "answer": node.answer})
+    for child in node.children or []:
+        result.extend(collect_answered_aspects(child))
+    return result
+
+
+def collect_aspects(node: AspectNode, exclude_ids: set[str] | None = None) -> list[str]:
+    exclude_ids = exclude_ids or set()
+    result = []
+    if node.id not in exclude_ids and node.aspect:
+        result.append(node.aspect)
+    for child in node.children or []:
+        result.extend(collect_aspects(child, exclude_ids))
+    return result
+
+
 @app.post("/session", response_model=CreateSessionResponse)
 async def create_session(request: CreateSessionRequest):
-    session_id = str(uuid.uuid4())
+    try:
+        session_id = str(uuid.uuid4())
 
-    raw_questions = generate_questions(objective=request.objective)
+        background = {
+            "help_level": request.help_level,
+            "prior_knowledge": request.prior_knowledge,
+            "already_planned": request.already_planned,
+            "constraints": request.constraints,
+            "knowledge_level": request.knowledge_level,
+        }
+        has_background = any(background.values())
 
-    aspects = [
-        AspectNode(
-            id=str(uuid.uuid4()),
-            aspect=q["aspect"],
-            question=q["question"],
-            suggestions=q["suggestions"],
+        raw_questions = generate_questions(
+            objective=request.objective,
+            background=background if has_background else None,
+            mode=request.mode,
         )
-        for q in raw_questions
-    ]
 
-    root = AspectNode(
-        id="root",
-        aspect=request.objective[:50],
-        question=request.objective,
-        suggestions=[],
-        children=aspects,
-    )
+        aspects = [
+            AspectNode(
+                id=str(uuid.uuid4()),
+                aspect=q["aspect"],
+                question=q["question"],
+                summary=q.get("summary", ""),
+                importance=q.get("importance", 0.5),
+                suggestions=q["suggestions"],
+            )
+            for q in raw_questions
+        ]
 
-    session = SessionState(
-        session_id=session_id,
-        objective=request.objective,
-        root=root,
-    )
-    store.create_session(session)
+        root = AspectNode(
+            id="root",
+            aspect=" ".join(request.objective.split()[:6]),
+            question=request.objective,
+            suggestions=[],
+            children=aspects,
+        )
 
-    return CreateSessionResponse(session_id=session_id, aspects=aspects)
+        session = SessionState(
+            session_id=session_id,
+            objective=request.objective,
+            mode=request.mode,
+            root=root,
+        )
+        store.create_session(session)
+
+        discourse_name = generate_discourse_name(request.objective)
+        return CreateSessionResponse(session_id=session_id, aspects=aspects, discourse_name=discourse_name)
+    except (ServerError, ClientError, _anthropic.APIStatusError, RuntimeError) as e:
+        raise HTTPException(status_code=503, detail="AI service is currently overloaded. Please try again in a moment.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 
 @app.post("/session/{session_id}/answer/{aspect_id}")
@@ -106,8 +160,18 @@ async def elaborate_aspect(session_id: str, aspect_id: str):
         if n.answer
     ]
 
+    path_ids = {n.id for n in path}
+    covered = collect_aspects(session.root, exclude_ids=path_ids)
+
+    depth = len(path) - 1  # path includes root, so depth 1 = direct children of root
+    max_questions = max(2, 6 - depth * 2)
+
     raw_questions = generate_questions(
-        objective=session.objective, context_path=context_path
+        objective=session.objective,
+        context_path=context_path,
+        covered_aspects=covered,
+        max_questions=max_questions,
+        mode=session.mode,
     )
 
     new_nodes = [
@@ -115,6 +179,8 @@ async def elaborate_aspect(session_id: str, aspect_id: str):
             id=str(uuid.uuid4()),
             aspect=q["aspect"],
             question=q["question"],
+            summary=q.get("summary", ""),
+            importance=q.get("importance", 0.5),
             suggestions=q["suggestions"],
         )
         for q in raw_questions
@@ -124,6 +190,90 @@ async def elaborate_aspect(session_id: str, aspect_id: str):
     store.save_session(session)
 
     return ElaborateResponse(aspects=new_nodes)
+
+
+@app.post("/session/{session_id}/add-aspect/{parent_id}")
+async def add_aspect(session_id: str, parent_id: str, request: AddAspectRequest):
+    session = store.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    parent = session.find_node(parent_id)
+    if not parent:
+        raise HTTPException(status_code=404, detail="Parent node not found")
+
+    question = request.question
+    suggestions = request.suggestions
+
+    if request.generate or not request.question.strip():
+        path = session.get_path_to_node(parent_id)
+        context_path = [
+            {"aspect": n.aspect, "question": n.question, "answer": n.answer}
+            for n in (path or [])[1:]
+            if n.answer
+        ]
+        covered = collect_aspects(session.root)
+        raw_questions = generate_questions(
+            objective=session.objective,
+            context_path=context_path if context_path else None,
+            covered_aspects=covered,
+            max_questions=1,
+            mode=session.mode,
+            target_aspect=request.aspect,
+        )
+        if raw_questions:
+            question = raw_questions[0]["question"]
+            suggestions = raw_questions[0].get("suggestions", [])
+
+    new_node = AspectNode(
+        id=str(uuid.uuid4()),
+        aspect=request.aspect,
+        question=question or f"How will you handle {request.aspect}?",
+        suggestions=suggestions,
+    )
+    parent.children.append(new_node)
+    store.save_session(session)
+
+    return {"aspect": new_node.model_dump()}
+
+
+@app.post("/session/{session_id}/generate-aspects/{parent_id}")
+async def generate_aspects_for_label(session_id: str, parent_id: str, request: GenerateAspectsRequest):
+    session = store.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    path = session.get_path_to_node(parent_id) or []
+    context_path = [
+        {"aspect": n.aspect, "question": n.question, "answer": n.answer or ""}
+        for n in path[1:]
+        if n.answer
+    ]
+    if request.details:
+        context_path.append({
+            "aspect": request.label,
+            "question": f"What are you thinking regarding {request.label}?",
+            "answer": request.details,
+        })
+
+    covered = collect_aspects(session.root)
+    raw_questions = generate_questions(
+        objective=session.objective,
+        context_path=context_path if context_path else None,
+        covered_aspects=covered,
+        mode=session.mode,
+    )
+
+    aspects = [
+        AspectNode(
+            id=str(uuid.uuid4()),
+            aspect=q["aspect"],
+            question=q["question"],
+            suggestions=q.get("suggestions", []),
+        )
+        for q in raw_questions
+    ]
+    return {"aspects": [a.model_dump() for a in aspects]}
 
 
 @app.get("/session/{session_id}/tree", response_model=TreeResponse)
@@ -137,3 +287,184 @@ async def get_tree(session_id: str):
         objective=session.objective,
         root=session.root,
     )
+
+
+@app.post("/session/{session_id}/prefetch", response_model=PrefetchResponse)
+async def prefetch_children(session_id: str, request: PrefetchRequest):
+    session = store.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    for aspect_id in request.aspect_ids:
+        path = session.get_path_to_node(aspect_id)
+        if not path:
+            continue
+
+        target_node = path[-1]
+        if not target_node.answer:
+            continue
+
+        # Build context path for the LLM (skip root node)
+        context_path = [
+            {"aspect": n.aspect, "question": n.question, "answer": n.answer}
+            for n in path[1:]
+            if n.answer
+        ]
+
+        prefetch_depth = len(path) - 1
+        prefetch_max_q = max(2, 6 - prefetch_depth * 2)
+        raw_questions = generate_questions(
+            objective=session.objective,
+            context_path=context_path,
+            max_questions=prefetch_max_q,
+            mode=session.mode,
+        )
+
+        ghost_nodes = [
+            AspectNode(
+                id=str(uuid.uuid4()),
+                aspect=q["aspect"],
+                question=q["question"],
+                summary=q.get("summary", ""),
+                importance=q.get("importance", 0.5),
+                suggestions=q["suggestions"],
+                is_ghost=True,
+            )
+            for q in raw_questions
+        ]
+
+        target_node.children.extend(ghost_nodes)
+
+    store.save_session(session)
+    return PrefetchResponse(status="ok")
+
+
+@app.post("/session/{session_id}/chat", response_model=ChatResponse)
+async def chat(session_id: str, request: ChatRequest):
+    session = store.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        answered = collect_answered_aspects(session.root)
+        existing_aspects = collect_aspects(session.root)
+        reply, suggested_answer, suggested_answers, new_aspects, updated_aspect, updated_question = generate_chat_reply(
+            objective=session.objective,
+            messages=[m.model_dump() for m in request.messages],
+            aspect_context=request.aspect_context,
+            answered_aspects=answered,
+            existing_aspects=existing_aspects,
+            mode=session.mode,
+        )
+        return ChatResponse(
+            reply=reply,
+            suggested_answer=suggested_answer,
+            suggested_answers=suggested_answers,
+            new_aspects=new_aspects,
+            updated_aspect=updated_aspect,
+            updated_question=updated_question,
+        )
+    except (ServerError, ClientError, _anthropic.APIStatusError, RuntimeError) as e:
+        raise HTTPException(status_code=503, detail="AI service is currently overloaded. Please try again in a moment.")
+
+
+@app.delete("/session/{session_id}/aspect/{aspect_id}")
+async def delete_aspect(session_id: str, aspect_id: str):
+    session = store.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    parent = session.find_parent(aspect_id)
+    if not parent:
+        raise HTTPException(status_code=404, detail="Aspect not found or cannot delete root")
+    parent.children = [c for c in parent.children if c.id != aspect_id]
+    store.save_session(session)
+    return {"status": "ok"}
+
+
+@app.post("/session/{session_id}/move-aspect/{aspect_id}")
+async def move_aspect(session_id: str, aspect_id: str, request: MoveAspectRequest):
+    session = store.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    node = session.find_node(aspect_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Aspect not found")
+    old_parent = session.find_parent(aspect_id)
+    if not old_parent:
+        raise HTTPException(status_code=404, detail="Cannot move root node")
+    new_parent = session.find_node(request.new_parent_id)
+    if not new_parent:
+        raise HTTPException(status_code=404, detail="Target parent not found")
+    old_parent.children = [c for c in old_parent.children if c.id != aspect_id]
+    new_parent.children.append(node)
+    store.save_session(session)
+    return {"status": "ok"}
+
+
+@app.post("/session/{session_id}/recontextualize/{aspect_id}", response_model=RecontextualizeResponse)
+async def recontextualize(session_id: str, aspect_id: str):
+    session = store.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    path = session.get_path_to_node(aspect_id)
+    if not path:
+        raise HTTPException(status_code=404, detail="Aspect not found")
+
+    # Skip root (path[0]) and the answered node itself (path[-1])
+    ancestor_nodes = path[1:-1]
+
+    ancestors_data = []
+    for anc in ancestor_nodes:
+        children_data = [
+            {"aspect": c.aspect, "answer": c.answer}
+            for c in (anc.children or [])
+            if not c.is_ghost
+        ]
+        ancestors_data.append({
+            "id": anc.id,
+            "aspect": anc.aspect,
+            "children": children_data,
+        })
+
+    result = recontextualize_ancestors(
+        objective=session.objective,
+        ancestors=ancestors_data,
+        mode=session.mode,
+    )
+
+    for update in result.get("updated_ancestors", []):
+        node = session.find_node(update["id"])
+        if node:
+            node.aspect = update["new_aspect"]
+    store.save_session(session)
+
+    return RecontextualizeResponse(
+        updated_ancestors=result.get("updated_ancestors", []),
+        spinoff_suggestions=result.get("spinoff_suggestions", []),
+    )
+
+
+@app.post("/label-chat")
+async def label_chat_endpoint(request: LabelChatRequest):
+    try:
+        label = generate_chat_label([m.model_dump() for m in request.messages])
+        return {"label": label}
+    except (ServerError, ClientError, _anthropic.APIStatusError, RuntimeError):
+        raise HTTPException(status_code=503, detail="AI service is currently overloaded. Please try again in a moment.")
+
+
+@app.post("/session/{session_id}/reveal/{aspect_id}", response_model=RevealResponse)
+async def reveal_children(session_id: str, aspect_id: str):
+    session = store.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    node = session.find_node(aspect_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Aspect not found")
+
+    for child in node.children:
+        child.is_ghost = False
+
+    store.save_session(session)
+    return RevealResponse(children=node.children)
