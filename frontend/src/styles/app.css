@@ -2905,12 +2905,40 @@ body.theme-dark .landing-input-wrapper:focus-within {
 
 /* Grandchildren sub-list */
 .lpanel-gc-list {
+  position: relative;
   padding-left: 16px;
   margin-left: 8px;
-  margin-top: 6px;
-  margin-bottom: 2px;
+  margin-top: 1px;
+  margin-bottom: 12px;
+  padding-bottom: 2px;
   display: flex;
   flex-direction: column;
+}
+
+/* Continue the main trunk through the gc-list area.
+   left: -30px = gc-list margin-left(8px) + content-area offset(22px) - border(1.5px) aligned to card trunk */
+.lpanel-gc-list::before {
+  content: '';
+  position: absolute;
+  left: -30px;
+  top: -11px;   /* bridges the 10px card margin-bottom + 1px gc margin-top gap */
+  bottom: -22px;
+  border-left: 1.5px solid var(--border);
+  pointer-events: none;
+}
+
+.lpanel-gc-list:last-child::before {
+  display: none;
+}
+
+/* Also suppress trunk on card that precedes the last gc-list */
+.lpanel-child-row:has(+ .lpanel-gc-list:last-child)::before {
+  display: none;
+}
+
+/* Answered card passes green color to its gc-list trunk */
+.lpanel-child-row--answered + .lpanel-gc-list::before {
+  border-color: var(--chip-sel-border);
 }
 
 .lpanel-child-row--gc {
@@ -2934,9 +2962,24 @@ body.theme-dark .landing-input-wrapper:focus-within {
   bottom: -14px; /* gap + enough to reach next gc's elbow */
 }
 
+/* First gc: extend trunk upward to connect to parent card
+   Bridges gc-list margin-top (1px) + parent margin-bottom (10px) = 11px gap */
+.lpanel-child-row--gc:first-child::before {
+  top: -17px;
+}
+
 .lpanel-child-row--gc:last-child::before,
 .lpanel-child-row--gc:last-of-type::before {
   display: none;
+}
+
+/* Single gc node: last-child hides it, so re-show just the upward stub.
+   top: -13px = 11px gap + 6px into parent (matches multi-gc depth) */
+.lpanel-child-row--gc:only-child::before {
+  display: block;
+  top: -13px;
+  bottom: auto;
+  height: 25px;
 }
 
 .lpanel-child-row--gc::after {
