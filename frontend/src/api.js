@@ -20,6 +20,7 @@ export async function createSession(objective, background = {}) {
       already_planned: background.alreadyPlanned || "",
       constraints: background.constraints || "",
       knowledge_level: background.knowledgeLevel || "",
+      extra_context: background.extraContext || "",
     }),
   });
 }
@@ -72,12 +73,16 @@ export async function labelChat(messages) {
   });
 }
 
-export async function sendChatMessage(sessionId, messages, aspectContext = null) {
+export async function sendChatMessage(sessionId, messages, aspectContext = null, tabContext = null) {
   return apiFetch(`/session/${sessionId}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, aspect_context: aspectContext }),
+    body: JSON.stringify({ messages, aspect_context: aspectContext, tab_context: tabContext }),
   });
+}
+
+export async function generatePanelTabs(sessionId) {
+  return apiFetch(`/session/${sessionId}/generate-panel`, { method: "POST" });
 }
 
 export async function deleteAspect(sessionId, aspectId) {

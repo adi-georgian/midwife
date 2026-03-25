@@ -156,8 +156,9 @@ function ContextQuestion({ question, value, onChange }) {
 export default function Landing({ onStart, disabled = false, error = null, sessions = [], onResume, onDeleteSession, onClearAllSessions }) {
   const [text, setText] = useState("");
   const [step, setStep] = useState("objective"); // "objective" | "mode" | "context"
-  const [mode, setMode] = useState("");
+  const [modes, setModes] = useState([]);
   const [answers, setAnswers] = useState({});
+  const [extraContext, setExtraContext] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [cycleIdx, setCycleIdx] = useState(0);
   const [fading, setFading] = useState(false);
@@ -186,28 +187,41 @@ export default function Landing({ onStart, disabled = false, error = null, sessi
     }
   }
 
-  function handleModeSelect(modeId) {
-    setMode(modeId);
-    setAnswers({});
-    setStep("context");
+  function handleModeToggle(modeId) {
+    setModes(prev =>
+      prev.includes(modeId) ? prev.filter(m => m !== modeId) : [...prev, modeId]
+    );
   }
 
-  function handleAnswer(id, val) {
-    setAnswers(prev => ({ ...prev, [id]: val }));
+  function handleModeProceed() {
+    if (modes.length > 0) {
+      setAnswers({});
+      setStep("context");
+    }
+  }
+
+  function handleAnswer(modeId, questionId, val) {
+    setAnswers(prev => ({
+      ...prev,
+      [modeId]: { ...(prev[modeId] || {}), [questionId]: val },
+    }));
   }
 
   function buildBackground() {
-    const questions = MODE_QUESTIONS[mode] || [];
-    const bg = { mode, helpLevel: "", priorKnowledge: "", alreadyPlanned: "", constraints: "", knowledgeLevel: "" };
-    for (const q of questions) {
-      const val = answers[q.id];
-      if (!val || (Array.isArray(val) && val.length === 0)) continue;
-      const str = Array.isArray(val) ? val.join(", ") : val;
-      const prefixed = q.prefix ? q.prefix + str : str;
-      if (q.field === "constraints" && bg.constraints) {
-        bg.constraints += "; " + prefixed;
-      } else {
-        bg[q.field] = prefixed;
+    const bg = { mode: modes.join(","), helpLevel: "", priorKnowledge: "", alreadyPlanned: "", constraints: "", knowledgeLevel: "", extraContext: extraContext.trim() };
+    for (const modeId of modes) {
+      const questions = MODE_QUESTIONS[modeId] || [];
+      const modeAnswers = answers[modeId] || {};
+      for (const q of questions) {
+        const val = modeAnswers[q.id];
+        if (!val || (Array.isArray(val) && val.length === 0)) continue;
+        const str = Array.isArray(val) ? val.join(", ") : val;
+        const prefixed = q.prefix ? q.prefix + str : str;
+        if (bg[q.field] && bg[q.field].trim()) {
+          bg[q.field] += "; " + prefixed;
+        } else {
+          bg[q.field] = prefixed;
+        }
       }
     }
     return bg;
@@ -215,12 +229,10 @@ export default function Landing({ onStart, disabled = false, error = null, sessi
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (text.trim() && mode) {
+    if (text.trim() && modes.length > 0) {
       onStart("I want to " + text.trim(), buildBackground());
     }
   }
-
-  const questions = MODE_QUESTIONS[mode] || [];
 
   return (
     <>
@@ -247,7 +259,7 @@ export default function Landing({ onStart, disabled = false, error = null, sessi
       />
       <div className="landing">
       <h1>midWife</h1>
-      <p className="landing-tagline">helping give birth to your ideas</p>
+      <p className="landing-tagline">helping give birth to your plans</p>
       {error && <p className="landing-error">{error}</p>}
 
       <form onSubmit={handleSubmit} className="landing-form">
@@ -293,14 +305,14 @@ export default function Landing({ onStart, disabled = false, error = null, sessi
         {/* Step 2: Mode picker */}
         {(step === "mode" || step === "context") && (
           <div className="landing-section landing-step" key="mode-section">
-            <p className="landing-section-label">What kind of help do you need?</p>
+            <p className="landing-section-label">What kind of help do you need? <span className="landing-section-hint">Select one or more</span></p>
             <div className="mode-grid">
               {MODES.map(m => (
                 <button
                   key={m.id}
                   type="button"
-                  className={`mode-card${mode === m.id ? " mode-card--active" : ""}`}
-                  onClick={() => handleModeSelect(m.id)}
+                  className={`mode-card${modes.includes(m.id) ? " mode-card--active" : ""}`}
+                  onClick={() => handleModeToggle(m.id)}
                 >
                   <span className="mode-card-icon">{m.icon}</span>
                   <span className="mode-card-label">{m.label}</span>
@@ -308,25 +320,47 @@ export default function Landing({ onStart, disabled = false, error = null, sessi
                 </button>
               ))}
             </div>
+            {step === "mode" && modes.length > 0 && (
+              <button type="button" className="landing-proceed-btn" onClick={handleModeProceed}>
+                Continue →
+              </button>
+            )}
           </div>
         )}
 
-        {/* Step 3: Mode-specific context questions */}
-        {step === "context" && mode && (
-          <div className="landing-section landing-step" key={`context-${mode}`}>
-            {questions.map(q => (
-              <ContextQuestion
-                key={q.id}
-                question={q}
-                value={answers[q.id]}
-                onChange={val => handleAnswer(q.id, val)}
+        {/* Step 3: Mode-specific context questions, grouped by mode */}
+        {step === "context" && modes.length > 0 && (
+          <div className="landing-section landing-step" key="context-section">
+            {modes.map(modeId => {
+              const modeMeta = MODES.find(m => m.id === modeId);
+              const questions = MODE_QUESTIONS[modeId] || [];
+              return (
+                <div key={modeId} className="landing-mode-group">
+                  <div className="landing-mode-group-header">
+                    <span>{modeMeta.icon}</span> {modeMeta.label}
+                  </div>
+                  {questions.map(q => (
+                    <ContextQuestion
+                      key={`${modeId}-${q.id}`}
+                      question={q}
+                      value={(answers[modeId] || {})[q.id]}
+                      onChange={val => handleAnswer(modeId, q.id, val)}
+                    />
+                  ))}
+                </div>
+              );
+            })}
+            <div className="landing-extra-context">
+              <label className="landing-question-label">Anything else you'd like to add?</label>
+              <textarea
+                className="landing-question-textarea"
+                value={extraContext}
+                onChange={e => setExtraContext(e.target.value)}
+                placeholder="Any other context, constraints, or background information…"
+                rows={2}
               />
-            ))}
-            <button
-              type="submit"
-              className="landing-submit-btn"
-              disabled={disabled}
-            >
+            </div>
+            <button type="submit" className="landing-submit-btn" disabled={disabled}>
               {disabled ? "Starting…" : "Begin →"}
             </button>
           </div>

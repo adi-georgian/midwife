@@ -17,6 +17,7 @@ class SessionState(BaseModel):
     session_id: str
     objective: str
     mode: str = ""
+    background: dict = {}
     root: AspectNode
 
     def find_node(self, node_id: str) -> AspectNode | None:
@@ -69,6 +70,7 @@ class CreateSessionRequest(BaseModel):
     already_planned: str = ""
     constraints: str = ""
     knowledge_level: str = ""
+    extra_context: str = ""
 
 
 class CreateSessionResponse(BaseModel):
@@ -108,9 +110,25 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class PanelTab(BaseModel):
+    id: str
+    title: str
+    content: str
+
+
+class GeneratePanelResponse(BaseModel):
+    tabs: list[PanelTab]
+
+
+class TabContext(BaseModel):
+    tab_id: str
+    tab_title: str
+
+
 class ChatRequest(BaseModel):
     messages: list[ChatMessage]
     aspect_context: dict | None = None  # {aspect, question, summary}
+    tab_context: TabContext | None = None
 
 
 class LabelChatRequest(BaseModel):
@@ -124,6 +142,7 @@ class ChatResponse(BaseModel):
     new_aspects: list[dict] = []
     updated_aspect: str | None = None
     updated_question: str | None = None
+    updated_tab: PanelTab | None = None
 
 
 class AddAspectRequest(BaseModel):

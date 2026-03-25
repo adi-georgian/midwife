@@ -20,7 +20,7 @@ import CreateNodeModal from "./CreateNodeModal";
 import LeftPanel from "./LeftPanel";
 import RepurposingModal from "./RepurposingModal";
 import PendingTopicsModal from "./PendingTopicsModal";
-import { answerAspect, elaborateAspect, addAspect, sendChatMessage, labelChat, deleteAspect, moveAspect, recontextualizeAspect } from "../api";
+import { answerAspect, elaborateAspect, addAspect, sendChatMessage, labelChat, deleteAspect, moveAspect, recontextualizeAspect, generatePanelTabs } from "../api";
 import { toTitleCase } from "../utils";
 
 const NODE_TYPES = { discourseNode: DiscourseNode };
@@ -320,6 +320,47 @@ function SpinoffTargetDropdown({ tree, suggestions, onAdd, onDismiss }) {
   );
 }
 
+// ── Overview content builder ──────────────────────────────────────────────────
+
+const MODE_DISPLAY_LABELS = {
+  logistics: "Logistics", brainstorming: "Brainstorm", creative: "Creative",
+  problem_solving: "Problem-solving", decision: "Decision", research: "Research",
+  reflection: "Reflect", goal_setting: "Set Goals", learning: "Learn",
+};
+
+const BG_FIELD_DISPLAY = {
+  helpLevel: "Help focus", priorKnowledge: "Prior knowledge",
+  alreadyPlanned: "Already planned", constraints: "Constraints",
+  knowledgeLevel: "Familiarity", extraContext: "Additional notes",
+};
+
+function buildOverviewContent(objective, background) {
+  const parts = [];
+
+  if (objective) {
+    parts.push(`Objective\n${objective}`);
+  }
+
+  if (background.mode) {
+    const modeLabels = background.mode
+      .split(",")
+      .map(m => MODE_DISPLAY_LABELS[m.trim()] || m.trim())
+      .filter(Boolean)
+      .join(", ");
+    if (modeLabels) parts.push(`Mode\n${modeLabels}`);
+  }
+
+  const bgLines = Object.entries(BG_FIELD_DISPLAY)
+    .filter(([key]) => background[key]?.trim?.())
+    .map(([key, label]) => `• ${label}: ${background[key]}`);
+
+  if (bgLines.length > 0) {
+    parts.push(`Context\n${bgLines.join("\n")}`);
+  }
+
+  return parts.join("\n\n");
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function DiscourseCanvas({ sessionId, tree, setTree, objective, discourseTitle, background = {}, onSessionChange, onHome }) {
@@ -342,7 +383,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
 
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
-  const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [rightPanelOpen, setRightPanelOpen] = useState(true);
 
   const [nodeMenu, setNodeMenu] = useState(null);
   const [movingNodeId, setMovingNodeId] = useState(null);
@@ -385,6 +426,22 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
   // Chat state
   const [chatThreads, setChatThreads] = useState([]);
   const [activeChatThreadId, setActiveChatThreadId] = useState(null);
+  const [isChatWaiting, setIsChatWaiting] = useState(false);
+
+  // Panel summary state — pre-populate Overview from landing data on mount
+  const [panelTabs, setPanelTabs] = useState(() => {
+    const content = buildOverviewContent(objective, background);
+    return [{ id: "overview", title: "Overview", content }];
+  });
+  const [activePanelTabId, setActivePanelTabId] = useState("overview");
+  const [isPanelGenerating, setIsPanelGenerating] = useState(false);
+
+  // Chat context selectors (auto-sync with focus node and active panel tab)
+  const [chatContextNodeId, setChatContextNodeId] = useState("root");
+  const [chatContextTabId, setChatContextTabId] = useState("overview");
+
+  useEffect(() => { setChatContextNodeId(focusNodeId); }, [focusNodeId]);
+  useEffect(() => { setChatContextTabId(activePanelTabId); }, [activePanelTabId]);
 
   // Compute focus path as a Set for the left panel
   const focusPathIds = new Set(focusPath.map(n => n.id));
@@ -774,7 +831,20 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
     ));
   }
 
-  async function handleSendChatMessage(content) {
+  async function handleGeneratePanel() {
+    setIsPanelGenerating(true);
+    try {
+      const { tabs } = await generatePanelTabs(sessionId);
+      setPanelTabs(tabs);
+      if (tabs.length > 0) setActivePanelTabId(tabs[0].id);
+    } catch (err) {
+      setApiError(err.message);
+    } finally {
+      setIsPanelGenerating(false);
+    }
+  }
+
+  async function handleSendChatMessage(content, context) {
     const thread = chatThreads.find(t => t.id === activeChatThreadId);
     if (!thread) return;
     const userMsg = { role: "user", content };
@@ -789,13 +859,21 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
       ? { aspect: aspectNode.aspect, question: aspectNode.question, summary: aspectNode.summary }
       : null;
 
+    const tabId = context?.tabId ?? chatContextTabId;
+    const tabContext = tabId && panelTabs
+      ? (() => { const t = panelTabs.find(t => t.id === tabId); return t ? { tab_id: t.id, tab_title: t.title } : null; })()
+      : null;
+
+    setIsChatWaiting(true);
     let data;
     try {
-      data = await sendChatMessage(sessionId, updatedMessages, aspectContext);
+      data = await sendChatMessage(sessionId, updatedMessages, aspectContext, tabContext);
     } catch (err) {
       setApiError(err.message);
+      setIsChatWaiting(false);
       return;
     }
+    setIsChatWaiting(false);
 
     // Handle updated aspect/question from chat
     if (data.updated_aspect && thread.aspectId) {
@@ -804,6 +882,13 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
       setTree(prev => patchNode(prev, thread.aspectId, patch));
       setInterviewQueue(prev => prev.map(n =>
         n.id === thread.aspectId ? { ...n, ...patch } : n
+      ));
+    }
+
+    // Handle updated panel tab content from chat
+    if (data.updated_tab && panelTabs) {
+      setPanelTabs(prev => prev.map(t =>
+        t.id === data.updated_tab.id ? { ...t, content: data.updated_tab.content } : t
       ));
     }
 
@@ -1216,6 +1301,11 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
           interviewPaused={interviewPaused}
           onResumeInterview={() => setInterviewPaused(false)}
           tree={tree}
+          panelTabs={panelTabs}
+          chatContextNodeId={chatContextNodeId}
+          chatContextTabId={chatContextTabId}
+          onContextChange={(nodeId, tabId) => { setChatContextNodeId(nodeId); setChatContextTabId(tabId); }}
+          isChatWaiting={isChatWaiting}
         />
       </div>
 
@@ -1228,6 +1318,12 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
           focusNodeId={focusNodeId}
           objective={objective}
           background={background}
+          phase={phase}
+          panelTabs={panelTabs}
+          activePanelTabId={activePanelTabId}
+          onSwitchTab={setActivePanelTabId}
+          onGeneratePanel={handleGeneratePanel}
+          isPanelGenerating={isPanelGenerating}
           onCollapse={() => setRightPanelOpen(false)}
           onExplore={handleExploreNode}
         />

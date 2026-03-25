@@ -61,6 +61,11 @@ export default function ChatPanel({
   onSwitchToThreads,
   onClose,
   tree,
+  panelTabs,
+  chatContextNodeId,
+  chatContextTabId,
+  onContextChange,
+  isChatWaiting,
 }) {
   const [inputDraft, setInputDraft] = useState("");
   const [panelView, setPanelView] = useState("chat");
@@ -69,11 +74,13 @@ export default function ChatPanel({
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
 
+  const flatNodes = useMemo(() => (tree ? flattenTree(tree) : []), [tree]);
+
   const activeThread = threads.find(t => t.id === activeThreadId) || null;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeThread?.messages?.length]);
+  }, [activeThread?.messages?.length, isChatWaiting]);
 
   // Auto-grow textarea
   function handleInputChange(e) {
@@ -86,7 +93,7 @@ export default function ChatPanel({
   function handleSend(e) {
     e?.preventDefault();
     if (!inputDraft.trim()) return;
-    onSendMessage(inputDraft.trim());
+    onSendMessage(inputDraft.trim(), { nodeId: chatContextNodeId, tabId: chatContextTabId });
     setInputDraft("");
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -219,8 +226,47 @@ export default function ChatPanel({
                 )}
               </div>
             ))}
+            {isChatWaiting && (
+              <div className="chat-message chat-message--assistant chat-typing">
+                <span className="chat-typing-dot" />
+                <span className="chat-typing-dot" />
+                <span className="chat-typing-dot" />
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
+          {(flatNodes.length > 0 || panelTabs) && (
+            <div className="chat-context-row">
+              <span className="chat-context-label">About</span>
+              {flatNodes.length > 0 && (
+                <select
+                  className="chat-context-select"
+                  value={chatContextNodeId || ""}
+                  onChange={e => onContextChange?.(e.target.value, chatContextTabId)}
+                >
+                  {flatNodes.map(n => (
+                    <option key={n.id} value={n.id}>
+                      {'\u00A0'.repeat(n.depth * 2)}{n.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {panelTabs && panelTabs.length > 0 && (
+                <>
+                  <span className="chat-context-sep">in</span>
+                  <select
+                    className="chat-context-select"
+                    value={chatContextTabId || ""}
+                    onChange={e => onContextChange?.(chatContextNodeId, e.target.value)}
+                  >
+                    {panelTabs.map(t => (
+                      <option key={t.id} value={t.id}>{t.title}</option>
+                    ))}
+                  </select>
+                </>
+              )}
+            </div>
+          )}
           <form className="chat-input-row" onSubmit={handleSend}>
             <textarea
               ref={textareaRef}

@@ -15,6 +15,11 @@ export default function ChatBar({
   interviewPaused,
   onResumeInterview,
   tree,
+  panelTabs,
+  chatContextNodeId,
+  chatContextTabId,
+  onContextChange,
+  isChatWaiting,
 }) {
   const [expanded, setExpanded] = useState(initialExpanded || false);
   const [inputDraft, setInputDraft] = useState("");
@@ -72,7 +77,7 @@ export default function ChatBar({
     if (!activeThreadId) {
       onNewThread();
     }
-    onSendMessage(inputDraft.trim());
+    onSendMessage(inputDraft.trim(), { nodeId: chatContextNodeId, tabId: chatContextTabId });
     setInputDraft("");
   }
 
@@ -106,6 +111,11 @@ export default function ChatBar({
             onSwitchToThreads={onSwitchToThreads}
             onClose={handleClose}
             tree={tree}
+            panelTabs={panelTabs}
+            chatContextNodeId={chatContextNodeId}
+            chatContextTabId={chatContextTabId}
+            onContextChange={onContextChange}
+            isChatWaiting={isChatWaiting}
           />
         </div>
       )}

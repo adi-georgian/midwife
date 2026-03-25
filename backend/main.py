@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException
 from google.genai.errors import ClientError, ServerError
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.interview import generate_chat_label, generate_chat_reply, generate_discourse_name, generate_questions, recontextualize_ancestors
+from backend.interview import generate_chat_label, generate_chat_reply, generate_discourse_name, generate_panel_tabs, generate_questions, recontextualize_ancestors
 from backend.models import (
     AddAspectRequest,
     AspectNode,
@@ -16,8 +16,10 @@ from backend.models import (
     CreateSessionResponse,
     ElaborateResponse,
     GenerateAspectsRequest,
+    GeneratePanelResponse,
     LabelChatRequest,
     MoveAspectRequest,
+    PanelTab,
     PrefetchRequest,
     PrefetchResponse,
     RecontextualizeResponse,
@@ -70,6 +72,7 @@ async def create_session(request: CreateSessionRequest):
             "already_planned": request.already_planned,
             "constraints": request.constraints,
             "knowledge_level": request.knowledge_level,
+            "extra_context": request.extra_context,
         }
         has_background = any(background.values())
 
@@ -103,6 +106,7 @@ async def create_session(request: CreateSessionRequest):
             session_id=session_id,
             objective=request.objective,
             mode=request.mode,
+            background=background if has_background else {},
             root=root,
         )
         store.create_session(session)
@@ -347,14 +351,17 @@ async def chat(session_id: str, request: ChatRequest):
     try:
         answered = collect_answered_aspects(session.root)
         existing_aspects = collect_aspects(session.root)
-        reply, suggested_answer, suggested_answers, new_aspects, updated_aspect, updated_question = generate_chat_reply(
+        tab_ctx = request.tab_context.model_dump() if request.tab_context else None
+        reply, suggested_answer, suggested_answers, new_aspects, updated_aspect, updated_question, updated_tab = generate_chat_reply(
             objective=session.objective,
             messages=[m.model_dump() for m in request.messages],
             aspect_context=request.aspect_context,
             answered_aspects=answered,
             existing_aspects=existing_aspects,
             mode=session.mode,
+            tab_context=tab_ctx,
         )
+        updated_tab_model = PanelTab(**updated_tab) if updated_tab else None
         return ChatResponse(
             reply=reply,
             suggested_answer=suggested_answer,
@@ -362,7 +369,25 @@ async def chat(session_id: str, request: ChatRequest):
             new_aspects=new_aspects,
             updated_aspect=updated_aspect,
             updated_question=updated_question,
+            updated_tab=updated_tab_model,
         )
+    except (ServerError, ClientError, _anthropic.APIStatusError, RuntimeError) as e:
+        raise HTTPException(status_code=503, detail="AI service is currently overloaded. Please try again in a moment.")
+
+
+@app.post("/session/{session_id}/generate-panel", response_model=GeneratePanelResponse)
+async def generate_panel(session_id: str):
+    session = store.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        tabs = generate_panel_tabs(
+            objective=session.objective,
+            mode=session.mode,
+            background=session.background,
+            tree=session.root.model_dump(),
+        )
+        return GeneratePanelResponse(tabs=[PanelTab(**t) for t in tabs])
     except (ServerError, ClientError, _anthropic.APIStatusError, RuntimeError) as e:
         raise HTTPException(status_code=503, detail="AI service is currently overloaded. Please try again in a moment.")
 

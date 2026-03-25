@@ -160,6 +160,16 @@ MODE_INSTRUCTIONS: dict[str, str] = {
 }
 
 
+def _mode_instructions(mode: str) -> str:
+    """Return combined instruction text for one or more comma-separated mode IDs."""
+    parts = []
+    for m in mode.split(","):
+        m = m.strip()
+        if m in MODE_INSTRUCTIONS:
+            parts.append(MODE_INSTRUCTIONS[m])
+    return "\n\n".join(parts)
+
+
 CHAT_SYSTEM = """You are Midwife, a Socratic planning assistant embedded in the user's planning session.
 Help the user think through the specific aspect they are unsure about.
 Ask follow-up questions if they need help clarifying their thinking.
@@ -193,6 +203,100 @@ def generate_discourse_name(objective: str) -> str:
     return _generate_text("", prompt, temperature=0.1, max_tokens=32)
 
 
+PANEL_TABS_BY_MODE: dict[str, list[dict]] = {
+    "logistics":      [{"id": "overview", "title": "Overview"}, {"id": "timeline", "title": "Timeline"}, {"id": "tasks", "title": "Tasks & Resources"}, {"id": "questions", "title": "Open Questions"}],
+    "brainstorming":  [{"id": "overview", "title": "Overview"}, {"id": "ideas", "title": "Ideas"}, {"id": "next_steps", "title": "Next Steps"}, {"id": "questions", "title": "Open Questions"}],
+    "creative":       [{"id": "overview", "title": "Overview"}, {"id": "concepts", "title": "Concepts"}, {"id": "constraints", "title": "Constraints"}, {"id": "questions", "title": "Open Questions"}],
+    "problem_solving":[{"id": "overview", "title": "Overview"}, {"id": "root_causes", "title": "Root Causes"}, {"id": "solutions", "title": "Solutions"}, {"id": "next_steps", "title": "Next Steps"}],
+    "decision":       [{"id": "overview", "title": "Overview"}, {"id": "options", "title": "Options"}, {"id": "recommendation", "title": "Recommendation"}, {"id": "questions", "title": "Open Questions"}],
+    "research":       [{"id": "overview", "title": "Overview"}, {"id": "findings", "title": "Key Findings"}, {"id": "gaps", "title": "Knowledge Gaps"}, {"id": "next_steps", "title": "Next Steps"}],
+    "reflection":     [{"id": "overview", "title": "Overview"}, {"id": "insights", "title": "Insights"}, {"id": "patterns", "title": "Patterns"}, {"id": "actions", "title": "Action Items"}],
+    "goal_setting":   [{"id": "overview", "title": "Overview"}, {"id": "milestones", "title": "Milestones"}, {"id": "timeline", "title": "Timeline"}, {"id": "blockers", "title": "Blockers"}],
+    "learning":       [{"id": "overview", "title": "Overview"}, {"id": "concepts", "title": "Key Concepts"}, {"id": "path", "title": "Learning Path"}, {"id": "questions", "title": "Open Questions"}],
+}
+
+DEFAULT_TABS = [{"id": "overview", "title": "Overview"}, {"id": "next_steps", "title": "Next Steps"}, {"id": "questions", "title": "Open Questions"}]
+
+
+def _tree_to_text(node: dict, depth: int = 0) -> str:
+    indent = "  " * depth
+    lines = [f"{indent}- {node.get('aspect', '')}"]
+    if node.get("answer"):
+        lines.append(f"{indent}  → {node['answer']}")
+    for child in node.get("children", []):
+        if not child.get("is_ghost"):
+            lines.append(_tree_to_text(child, depth + 1))
+    return "\n".join(lines)
+
+
+def generate_panel_tabs(objective: str, mode: str, background: dict, tree: dict) -> list[dict]:
+    """Generate all panel tab contents for the given session."""
+    primary_mode = mode.split(",")[0].strip() if mode else ""
+    tabs_def = PANEL_TABS_BY_MODE.get(primary_mode, DEFAULT_TABS)
+    tab_names = {t["id"]: t["title"] for t in tabs_def}
+
+    tree_text = _tree_to_text(tree)
+
+    bg_lines = []
+    for k, v in (background or {}).items():
+        if v and str(v).strip():
+            bg_lines.append(f"- {k.replace('_', ' ').title()}: {v}")
+    bg_text = "\n".join(bg_lines) if bg_lines else "None provided."
+
+    tab_ids_str = ", ".join(f'"{t["id"]}"' for t in tabs_def)
+    tab_descriptions = "\n".join(
+        f'- "{t["id"]}" ({t["title"]}): concise content for this section based on what has been discussed'
+        for t in tabs_def
+    )
+
+    system = (
+        "You are a planning assistant summarising a Socratic planning session. "
+        "Based on the objective, background, and discourse tree provided, generate content for each of the following panel tabs. "
+        "Be concrete, specific, and grounded in what the user actually said. "
+        "Use plain language. Use bullet points where appropriate. Keep each section focused and actionable. "
+        "Respond with valid JSON only: a single object where each key is a tab id and the value is the content string.\n"
+        f"Tabs to fill:\n{tab_descriptions}"
+    )
+    if mode:
+        instr = _mode_instructions(mode)
+        if instr:
+            system += "\n\n" + instr
+
+    json_example = "{" + ", ".join('"' + t["id"] + '": "..."' for t in tabs_def) + "}"
+    prompt = (
+        f"Objective: {objective}\n\n"
+        f"Background context:\n{bg_text}\n\n"
+        f"Discourse tree (aspects and answers):\n{tree_text}\n\n"
+        f"Generate content for these tabs: {tab_ids_str}.\n"
+        f"Respond with JSON only: {json_example}"
+    )
+
+    raw = _generate_text(system, prompt, temperature=0.4, max_tokens=2048)
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+    if text.endswith("```"):
+        text = text.rsplit("```", 1)[0]
+    text = text.strip()
+    brace = text.find("{")
+    if brace > 0:
+        text = text[brace:]
+
+    try:
+        data = json.loads(text)
+    except Exception:
+        data = {}
+
+    result = []
+    for tab in tabs_def:
+        result.append({
+            "id": tab["id"],
+            "title": tab["title"],
+            "content": data.get(tab["id"], ""),
+        })
+    return result
+
+
 def generate_chat_reply(
     objective: str,
     messages: list[dict],
@@ -200,10 +304,13 @@ def generate_chat_reply(
     answered_aspects: list[dict] | None = None,
     existing_aspects: list[str] | None = None,
     mode: str = "",
-) -> tuple[str, str | None, list[dict], str | None, str | None]:
+    tab_context: dict | None = None,
+) -> tuple[str, str | None, list[str], list[dict], str | None, str | None, dict | None]:
     system = CHAT_SYSTEM
-    if mode and mode in MODE_INSTRUCTIONS:
-        system += "\n\n" + MODE_INSTRUCTIONS[mode]
+    if mode:
+        instr = _mode_instructions(mode)
+        if instr:
+            system += "\n\n" + instr
     if answered_aspects:
         system += "\n\nThe following aspects have already been decided in this planning session — treat these as established facts:\n"
         for a in answered_aspects:
@@ -231,6 +338,19 @@ def generate_chat_reply(
             f"Keep new_aspects as an empty list unless the user themselves explicitly raises "
             f"a genuinely new and distinct concern — do not proactively suggest sub-topics."
         )
+    if tab_context:
+        system += (
+            f"\n\nThe user is discussing the \"{tab_context['tab_title']}\" section of their summary panel. "
+            f"If their message is a directive to change or update that section (not just a question), "
+            f"reflect that update in the \"updated_tab_content\" field of your JSON response — "
+            f"provide the full updated content for that section as a plain-text string with bullet points where appropriate. "
+            f"If the message is a question or clarification (not a directive), leave \"updated_tab_content\" as null."
+        )
+        # Extend the JSON schema in CHAT_SYSTEM to include updated_tab_content
+        system = system.replace(
+            '{"reply": "...", "suggested_answer": null, "suggested_answers": [], "new_aspects": [], "updated_aspect": null, "updated_question": null}',
+            '{"reply": "...", "suggested_answer": null, "suggested_answers": [], "new_aspects": [], "updated_aspect": null, "updated_question": null, "updated_tab_content": null}'
+        )
 
     raw = _generate_text(system, messages, temperature=0.7)
     # Strip markdown code fences if present
@@ -246,6 +366,13 @@ def generate_chat_reply(
         text = text[brace:]
     try:
         data = json.loads(text)
+        updated_tab = None
+        if tab_context and data.get("updated_tab_content"):
+            updated_tab = {
+                "id": tab_context["tab_id"],
+                "title": tab_context["tab_title"],
+                "content": data["updated_tab_content"],
+            }
         return (
             data["reply"],
             data.get("suggested_answer"),
@@ -253,9 +380,10 @@ def generate_chat_reply(
             data.get("new_aspects", []),
             data.get("updated_aspect"),
             data.get("updated_question"),
+            updated_tab,
         )
     except Exception:
-        return raw, None, [], [], None, None
+        return raw, None, [], [], None, None, None
 
 
 def recontextualize_ancestors(objective: str, ancestors: list[dict], mode: str = "") -> dict:
@@ -277,8 +405,10 @@ def recontextualize_ancestors(objective: str, ancestors: list[dict], mode: str =
         "Only include nodes in updated_ancestors if their label actually needs changing. "
         "Keep both lists empty if nothing needs updating."
     )
-    if mode and mode in MODE_INSTRUCTIONS:
-        system += "\n\n" + MODE_INSTRUCTIONS[mode]
+    if mode:
+        instr = _mode_instructions(mode)
+        if instr:
+            system += "\n\n" + instr
 
     prompt = f"Objective: {objective}\n\nAncestor nodes to review:\n"
     for anc in ancestors:
@@ -320,8 +450,10 @@ def generate_questions(
     already_planned, constraints — injected as context before the question list.
     """
     system_instruction = SYSTEM_INSTRUCTION_BASE.format(max_questions=max_questions)
-    if mode and mode in MODE_INSTRUCTIONS:
-        system_instruction += "\n\n" + MODE_INSTRUCTIONS[mode]
+    if mode:
+        instr = _mode_instructions(mode)
+        if instr:
+            system_instruction += "\n\n" + instr
 
     context_text = ""
 
@@ -345,6 +477,8 @@ def generate_questions(
                     "Format the 'question' field as: \"[One-sentence plain-English intro]. [The actual question]?\". "
                     "No jargon at all."
                 )
+        if background.get("extra_context"):
+            bg_lines.append(f"Additional context: {background['extra_context']}")
         if bg_lines:
             context_text += "Background context provided by the user:\n" + "\n".join(bg_lines) + "\n\n"
 
