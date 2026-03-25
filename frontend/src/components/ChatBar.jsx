@@ -20,6 +20,7 @@ export default function ChatBar({
   chatContextTabId,
   onContextChange,
   isChatWaiting,
+  onGeneratePanel,
 }) {
   const [expanded, setExpanded] = useState(initialExpanded || false);
   const [inputDraft, setInputDraft] = useState("");
@@ -116,6 +117,7 @@ export default function ChatBar({
             chatContextTabId={chatContextTabId}
             onContextChange={onContextChange}
             isChatWaiting={isChatWaiting}
+            onGeneratePanel={onGeneratePanel}
           />
         </div>
       )}

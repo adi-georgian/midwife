@@ -1733,6 +1733,25 @@ body.theme-dark .landing-input-wrapper:focus-within {
   background: var(--choose-btn-hover);
 }
 
+.chat-add-to-plan-btn {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 3px 9px;
+  font-size: 0.74rem;
+  background: none;
+  color: var(--text-3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: color 0.12s, border-color 0.12s;
+}
+
+.chat-add-to-plan-btn:hover {
+  color: var(--text-1);
+  border-color: var(--border-hover);
+}
+
 .choose-answer:disabled {
   background: var(--surface-alt);
   color: var(--text-3);
@@ -3906,6 +3925,22 @@ body.theme-dark .landing-input-wrapper:focus-within {
   cursor: pointer;
   font-family: var(--font-sans);
   transition: color 0.15s;
+}
+
+/* ── RightPanel header ─────────────────────────────────────────────── */
+
+.rpanel-header {
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.rpanel-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-3);
 }
 
 /* ── RightPanel tab system ─────────────────────────────────────────── */

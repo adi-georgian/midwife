@@ -1201,6 +1201,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
                 flushPendingSpinoffs();
                 setPhase("selecting");
                 setLeftPanelOpen(true);
+                handleGeneratePanel();
               }
             }}
           />
@@ -1230,6 +1231,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
               flushPendingSpinoffs();
               setPhase("selecting");
               setLeftPanelOpen(true);
+              handleGeneratePanel();
             }}
             onSkip={() => {
               setPendingRelabelings([]);
@@ -1237,6 +1239,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
               flushPendingSpinoffs();
               setPhase("selecting");
               setLeftPanelOpen(true);
+              handleGeneratePanel();
             }}
           />
         )}
@@ -1306,6 +1309,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
           chatContextTabId={chatContextTabId}
           onContextChange={(nodeId, tabId) => { setChatContextNodeId(nodeId); setChatContextTabId(tabId); }}
           isChatWaiting={isChatWaiting}
+          onGeneratePanel={handleGeneratePanel}
         />
       </div>
 

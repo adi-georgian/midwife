@@ -66,6 +66,7 @@ export default function ChatPanel({
   chatContextTabId,
   onContextChange,
   isChatWaiting,
+  onGeneratePanel,
 }) {
   const [inputDraft, setInputDraft] = useState("");
   const [panelView, setPanelView] = useState("chat");
@@ -223,6 +224,11 @@ export default function ChatPanel({
                       />
                     ))}
                   </div>
+                )}
+                {msg.role === "assistant" && onGeneratePanel && (
+                  <button className="chat-add-to-plan-btn" onClick={onGeneratePanel} title="Refresh the Plan panel with this conversation">
+                    ↻ Add to Plan
+                  </button>
                 )}
               </div>
             ))}

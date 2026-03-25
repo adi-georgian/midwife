@@ -33,6 +33,10 @@ export default function RightPanel({
     <div className="right-panel">
       <button className="rpanel-collapse-btn" onClick={onCollapse} title="Collapse panel">›</button>
 
+      <div className="rpanel-header">
+        <span className="rpanel-title">Plan</span>
+      </div>
+
       <div className="rpanel-tab-bar">
         {tabDefs.map(tab => (
           <button
