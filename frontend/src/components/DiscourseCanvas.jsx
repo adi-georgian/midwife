@@ -6,11 +6,12 @@ import {
   ControlButton,
   useNodesState,
   useEdgesState,
+  useNodesInitialized,
+  useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
 import DiscourseNode from "./DiscourseNode";
-import MindmapEdge from "./MindmapEdge";
 import InterviewFlow from "./InterviewFlow";
 import ReviewCard from "./ReviewCard";
 import ChatBar from "./ChatBar";
@@ -22,17 +23,26 @@ import RepurposingModal from "./RepurposingModal";
 import PendingTopicsModal from "./PendingTopicsModal";
 import { answerAspect, elaborateAspect, addAspect, sendChatMessage, labelChat, deleteAspect, moveAspect, recontextualizeAspect, generatePanelTabs } from "../api";
 import { toTitleCase } from "../utils";
+import dagre from "@dagrejs/dagre";
 
 const NODE_TYPES = { discourseNode: DiscourseNode };
-const EDGE_TYPES = { mindmapEdge: MindmapEdge };
 
 const H_STEP = 180;
 const PARENT_Y = 120;
 
-// Layout spacing constants
+// Layout spacing constants (used for initial rough positions in buildGraphElements)
 const MIN_CHILD_H = 90;    // minimum height allocated per child
 const GC_H = 75;           // vertical space allocated per grandchild
 const GGC_H = 55;          // vertical space allocated per great-grandchild
+
+// Measured layout constants — legacy manual layout
+const MINDMAP_GAP_H = 40;
+const MINDMAP_GAP_V = 20;
+const MINDMAP_ARM = 240;
+
+// Dagre layout constants
+const DAGRE_RANKSEP = 120;  // horizontal gap between levels — needs room for bezier curves
+const DAGRE_NODESEP = 20;   // vertical gap between siblings
 
 function normAspect(node) {
   return { ...node, aspect: toTitleCase(node.aspect) };
@@ -120,7 +130,7 @@ function buildGraphElements(tree, interviewingId, focusNodeId, viewMode) {
       id: `e-parent-${parentNode.id}-${focusNode.id}`,
       source: parentNode.id,
       target: focusNode.id,
-      type: "mindmapEdge",
+      type: "default",
       sourceHandle: "bottom",
       targetHandle: "top",
       style: { stroke: "#ccc", opacity: 0.5, strokeDasharray: "6 4", strokeWidth: 1.5 },
@@ -178,7 +188,7 @@ function buildGraphElements(tree, interviewingId, focusNodeId, viewMode) {
         id: `e-${focusNode.id}-${child.id}`,
         source: focusNode.id,
         target: child.id,
-        type: "mindmapEdge",
+        type: "default",
         sourceHandle: srcHandle,
         style: childBaseStyle,
         data: { baseStyle: childBaseStyle },
@@ -210,7 +220,7 @@ function buildGraphElements(tree, interviewingId, focusNodeId, viewMode) {
           id: `e-${child.id}-${gc.id}`,
           source: child.id,
           target: gc.id,
-          type: "mindmapEdge",
+          type: "default",
           style: gcBaseStyle,
           data: { baseStyle: gcBaseStyle },
         });
@@ -240,7 +250,7 @@ function buildGraphElements(tree, interviewingId, focusNodeId, viewMode) {
               id: `e-${gc.id}-${ggc.id}`,
               source: gc.id,
               target: ggc.id,
-              type: "mindmapEdge",
+              type: "default",
               style: ggcBaseStyleFull,
               data: { baseStyle: ggcBaseStyleFull },
             });
@@ -361,6 +371,246 @@ function buildOverviewContent(objective, background) {
   return parts.join("\n\n");
 }
 
+// ── Measured layout ───────────────────────────────────────────────────────────
+
+function computeMindmapLayout(rfNodes, rfEdges, focusId) {
+  // All nodes must be measured before we can do a proper layout
+  if (rfNodes.some(n => !n.measured)) return null;
+
+  const byId = Object.fromEntries(rfNodes.map(n => [n.id, n]));
+  const focus = byId[focusId];
+  if (!focus) return null;
+
+  // Build parent→children map from edges
+  const childrenOf = {};
+  for (const edge of rfEdges) {
+    if (!childrenOf[edge.source]) childrenOf[edge.source] = [];
+    childrenOf[edge.source].push(edge.target);
+  }
+
+  const fw = focus.measured.width;
+  const fh = focus.measured.height;
+  const fcy = fh / 2; // focus node vertical center
+
+  const positions = { [focusId]: { x: 0, y: 0 } };
+
+  // Direct children of focus (skip parent preview)
+  const directChildren = (childrenOf[focusId] || [])
+    .map(id => byId[id])
+    .filter(n => n && !n.data?.isParentPreview);
+
+  const leftChildren = directChildren.filter(n => rfEdges.find(e => e.source === focusId && e.target === n.id)?.sourceHandle === "left");
+  const rightChildren = directChildren.filter(n => rfEdges.find(e => e.source === focusId && e.target === n.id)?.sourceHandle !== "left");
+
+  // Recursively place a group of sibling nodes, centered around centerY
+  function placeGroup(group, centerY, getNodeX) {
+    if (group.length === 0) return;
+    const totalH = group.reduce(
+      (s, n) => s + n.measured.height + MINDMAP_GAP_V,
+      -MINDMAP_GAP_V
+    );
+    let y = centerY - totalH / 2;
+
+    for (const node of group) {
+      const nh = node.measured.height;
+      const nw = node.measured.width;
+      const nx = getNodeX(nw);
+      positions[node.id] = { x: nx, y };
+
+      const nodeCenterY = y + nh / 2;
+      const grandchildren = (childrenOf[node.id] || [])
+        .map(id => byId[id])
+        .filter(Boolean);
+
+      if (grandchildren.length > 0) {
+        const isRight = nx >= 0;
+        placeGroup(
+          grandchildren,
+          nodeCenterY,
+          gcW => isRight ? nx + nw + MINDMAP_GAP_H : nx - gcW - MINDMAP_GAP_H
+        );
+      }
+
+      y += nh + MINDMAP_GAP_V;
+    }
+  }
+
+  // Right children: capped so arm from focus center doesn't exceed MINDMAP_ARM
+  const rightStart = Math.min(fw + MINDMAP_GAP_H, fw / 2 + MINDMAP_ARM);
+  placeGroup(rightChildren, fcy, () => rightStart);
+
+  // Left children: symmetric — right edge at -rightStart + fw, i.e. -(rightStart - fw + width + gap)
+  const leftGap = rightStart - fw; // gap from focus left edge to children
+  placeGroup(leftChildren, fcy, w => -(w + leftGap));
+
+  // Parent preview: centered horizontally above focus
+  const parentPreview = rfNodes.find(n => n.data?.isParentPreview);
+  if (parentPreview?.measured) {
+    const pw = parentPreview.measured.width;
+    const ph = parentPreview.measured.height;
+    positions[parentPreview.id] = {
+      x: fw / 2 - pw / 2,
+      y: -(ph + MINDMAP_GAP_H),
+    };
+  }
+
+  return positions;
+}
+
+function computeDagreLayout(rfNodes, rfEdges, focusId) {
+  if (rfNodes.some(n => !n.measured)) return null;
+
+  const byId = Object.fromEntries(rfNodes.map(n => [n.id, n]));
+  const focus = byId[focusId];
+  if (!focus) return null;
+
+  const fw = focus.measured.width;
+  const fh = focus.measured.height;
+
+  const childrenOf = {};
+  for (const e of rfEdges) {
+    if (!childrenOf[e.source]) childrenOf[e.source] = [];
+    childrenOf[e.source].push(e.target);
+  }
+
+  const directKids = (childrenOf[focusId] || [])
+    .map(id => byId[id])
+    .filter(n => n && !n.data?.isParentPreview);
+  const leftKids  = directKids.filter(n => rfEdges.find(e => e.source === focusId && e.target === n.id)?.sourceHandle === "left");
+  const rightKids = directKids.filter(n => rfEdges.find(e => e.source === focusId && e.target === n.id)?.sourceHandle !== "left");
+
+  const positions = { [focusId]: { x: 0, y: 0 } };
+
+  function collectSubtree(roots) {
+    const visited = new Set();
+    const queue = roots.map(n => n.id);
+    while (queue.length) {
+      const id = queue.shift();
+      if (visited.has(id)) continue;
+      visited.add(id);
+      (childrenOf[id] || []).forEach(cid => {
+        if (byId[cid] && !byId[cid].data?.isParentPreview) queue.push(cid);
+      });
+    }
+    return [...visited].map(id => byId[id]).filter(Boolean);
+  }
+
+  function layoutSide(sideKids, direction) {
+    if (sideKids.length === 0) return;
+
+    const g = new dagre.graphlib.Graph();
+    g.setGraph({ rankdir: direction, ranksep: DAGRE_RANKSEP, nodesep: DAGRE_NODESEP, marginx: 0, marginy: 0 });
+    g.setDefaultEdgeLabel(() => ({}));
+
+    g.setNode(focusId, { width: fw, height: fh });
+
+    const subtreeNodes = collectSubtree(sideKids);
+    subtreeNodes.forEach(n => g.setNode(n.id, { width: n.measured.width, height: n.measured.height }));
+
+    sideKids.forEach(kid => g.setEdge(focusId, kid.id));
+    subtreeNodes.forEach(n => {
+      (childrenOf[n.id] || []).forEach(cid => {
+        if (byId[cid] && subtreeNodes.some(sn => sn.id === cid)) g.setEdge(n.id, cid);
+      });
+    });
+
+    dagre.layout(g);
+
+    const fp = g.node(focusId);
+
+    // Raw top-left positions from dagre centers
+    const raw = {};
+    subtreeNodes.forEach(n => {
+      const dp = g.node(n.id);
+      if (!dp) return;
+      raw[n.id] = {
+        x: (dp.x - fp.x) + fw / 2 - n.measured.width / 2,
+        y: (dp.y - fp.y) + fh / 2 - n.measured.height / 2,
+      };
+    });
+
+    // BFS to determine rank (depth from focus) for each node
+    const rankOf = {};
+    const bfsQueue = sideKids.map(n => [n.id, 1]);
+    for (let i = 0; i < bfsQueue.length; i++) {
+      const [id, rank] = bfsQueue[i];
+      if (rankOf[id] !== undefined) continue;
+      rankOf[id] = rank;
+      (childrenOf[id] || []).forEach(cid => {
+        if (byId[cid] && !byId[cid].data?.isParentPreview) bfsQueue.push([cid, rank + 1]);
+      });
+    }
+
+    // Group nodes by rank, then align edges within each rank
+    const byRank = {};
+    subtreeNodes.forEach(n => {
+      const r = rankOf[n.id] ?? 1;
+      if (!byRank[r]) byRank[r] = [];
+      byRank[r].push(n);
+    });
+
+    Object.values(byRank).forEach(rankNodes => {
+      if (direction === "LR") {
+        // Right side: align right edges — grandchildren always sit further right
+        // than any sibling, preventing a wide sibling from reaching into deeper ranks.
+        const maxRight = Math.max(...rankNodes.map(n => raw[n.id].x + n.measured.width));
+        rankNodes.forEach(n => { positions[n.id] = { x: maxRight - n.measured.width, y: raw[n.id].y }; });
+      } else {
+        // Left side: align left edges to the leftmost node in the rank.
+        // This ensures grandchildren always sit further from the focus than any
+        // sibling node — a wider sibling can never "reach into" a deeper rank.
+        const minX = Math.min(...rankNodes.map(n => raw[n.id].x));
+        rankNodes.forEach(n => { positions[n.id] = { x: minX, y: raw[n.id].y }; });
+      }
+    });
+  }
+
+  layoutSide(rightKids, "LR");
+  layoutSide(leftKids,  "RL");
+
+  const parentPreview = rfNodes.find(n => n.data?.isParentPreview);
+  if (parentPreview?.measured) {
+    const pw = parentPreview.measured.width;
+    const ph = parentPreview.measured.height;
+    positions[parentPreview.id] = { x: fw / 2 - pw / 2, y: -(ph + DAGRE_RANKSEP) };
+  }
+
+  return positions;
+}
+
+function AutoLayout({ focusNodeId, layoutEngine }) {
+  const { getNodes, getEdges, setNodes, fitView } = useReactFlow();
+  const nodesInitialized = useNodesInitialized();
+  const layoutKeyRef = useRef(null);
+
+  useEffect(() => {
+    if (!nodesInitialized) return;
+
+    const rfNodes = getNodes();
+    const rfEdges = getEdges();
+
+    const key = focusNodeId + "|" + rfNodes
+      .map(n => `${n.id}:${n.measured?.width | 0}:${n.measured?.height | 0}`)
+      .sort()
+      .join("|");
+    if (key === layoutKeyRef.current) return;
+    layoutKeyRef.current = key;
+
+    const newPositions = layoutEngine === "dagre"
+      ? computeDagreLayout(rfNodes, rfEdges, focusNodeId)
+      : computeMindmapLayout(rfNodes, rfEdges, focusNodeId);
+    if (!newPositions) return;
+
+    setNodes(prev => prev.map(n =>
+      newPositions[n.id] !== undefined ? { ...n, position: newPositions[n.id] } : n
+    ));
+
+    setTimeout(() => fitView({ padding: 0.15, duration: 300 }), 0);
+  }, [nodesInitialized, focusNodeId, layoutEngine]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return null;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function DiscourseCanvas({ sessionId, tree, setTree, objective, discourseTitle, background = {}, onSessionChange, onHome }) {
@@ -408,6 +658,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
   const [isRecontextualizing, setIsRecontextualizing] = useState(false);
   const [pendingSpinoffs, setPendingSpinoffs] = useState(null);
   const [theme, setTheme] = useState("sepia");
+  const [layoutEngine, setLayoutEngine] = useState("dagre");
   const settingsPanelRef = useRef(null);
   const settingsBtnRef = useRef(null);
 
@@ -451,7 +702,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
     const { nodes: n, edges: e } = buildGraphElements(tree, currentNode?.id, focusNodeId, viewMode);
     setNodes(n);
     setEdges(e);
-    setTimeout(() => rfRef.current?.fitView({ padding: 0.25, duration: 300 }), 0);
+    // AutoLayout handles fitView after measuring node dimensions
   }, [tree, currentNode?.id, focusNodeId, viewMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Separate hover effect — updates dimming in-place without resetting positions or fitView
@@ -465,7 +716,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
     const parentId = parent?.id ?? null;
     setNodes(prev => prev.map(n => ({
       ...n,
-      data: { ...n.data, isDimmed: n.id !== hoveredNodeId && n.id !== parentId },
+      data: { ...n.data, isDimmed: n.id !== hoveredNodeId && n.id !== parentId && n.id !== exploringNodeId },
     })));
     setEdges(prev => prev.map(e => {
       const isHighlighted = parentId && e.source === parentId && e.target === hoveredNodeId;
@@ -475,14 +726,14 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
       }
       return { ...e, style: { ...base, opacity: 0.12 } };
     }));
-  }, [hoveredNodeId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hoveredNodeId, exploringNodeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function rebuildLayout() {
     if (!tree) return;
     const { nodes: n, edges: e } = buildGraphElements(tree, currentNode?.id, focusNodeId, viewMode);
     setNodes(n);
     setEdges(e);
-    setTimeout(() => rfRef.current?.fitView({ padding: 0.25, duration: 300 }), 0);
+    setTimeout(() => rfRef.current?.fitView({ padding: 0.15, duration: 300 }), 0);
   }
 
   useEffect(() => {
@@ -498,19 +749,19 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
   // Re-fit canvas when the interview overlay drops (chat opens or phase ends)
   useEffect(() => {
     if (interviewPaused) {
-      setTimeout(() => rfRef.current?.fitView({ padding: 0.25, duration: 400 }), 80);
+      setTimeout(() => rfRef.current?.fitView({ padding: 0.15, duration: 400 }), 80);
     }
   }, [interviewPaused]);
 
   useEffect(() => {
     if (phase === "selecting") {
-      setTimeout(() => rfRef.current?.fitView({ padding: 0.25, duration: 400 }), 80);
+      setTimeout(() => rfRef.current?.fitView({ padding: 0.15, duration: 400 }), 80);
     }
   }, [phase]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      rfRef.current?.fitView({ padding: 0.25, duration: 300 });
+      rfRef.current?.fitView({ padding: 0.15, duration: 300 });
     }, 350);
     return () => clearTimeout(timer);
   }, [chatOpen, leftPanelOpen, rightPanelOpen]);
@@ -712,6 +963,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
 
     if (phase === "selecting") {
       setSelectedNodeId(prev => prev === rfNode.id ? null : rfNode.id);
+      setLeftPanelOpen(true);
     }
   }
 
@@ -722,6 +974,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
     if (nodeData.isParentPreview) return; // parent preview already navigates on single click
     if (phase !== "selecting") return;
     setSelectedNodeId(null);
+    setLeftPanelOpen(true);
     navigateTo(rfNode.id);
   }
 
@@ -1090,6 +1343,13 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
                     <option value="dark">Dark</option>
                   </select>
                 </div>
+                <div className="settings-row">
+                  <label>Layout Engine</label>
+                  <select value={layoutEngine} onChange={e => setLayoutEngine(e.target.value)}>
+                    <option value="dagre">Dagre (new)</option>
+                    <option value="legacy">Legacy</option>
+                  </select>
+                </div>
               </div>
             )}
           </div>
@@ -1148,7 +1408,6 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
           nodes={nodes}
           edges={edges}
           nodeTypes={NODE_TYPES}
-          edgeTypes={EDGE_TYPES}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onNodeClick={handleNodeClick}
@@ -1158,15 +1417,21 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
           onNodeMouseLeave={() => setHoveredNodeId(null)}
           onInit={rf => (rfRef.current = rf)}
           fitView
-          fitViewOptions={{ padding: 0.25 }}
+          fitViewOptions={{ padding: 0.15 }}
           minZoom={0.2}
           maxZoom={2}
         >
+          <AutoLayout focusNodeId={focusNodeId} layoutEngine={layoutEngine} />
           <Background color={theme === "dark" ? "#2a2520" : "#d8c5aa"} gap={28} variant="dots" size={1} />
           <Controls showFitView={false}>
-            <ControlButton onClick={rebuildLayout} title="Fit view">
-              <svg viewBox="0 0 32 30" fill="currentColor">
-                <path d="M3.692 4.192H10v1.77H5.461V10.5H3.692V4.192zm24.615 0v6.308h-1.769V5.962H22v-1.77h6.307zM10 26.038H3.692V19.73h1.77v4.538H10v1.77zm18.307-6.307v6.307H22v-1.77h4.538V19.73h1.769z"/>
+            <ControlButton
+              onClick={() => { setLeftPanelOpen(false); setRightPanelOpen(false); }}
+              title="Collapse panels"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path d="M3 4h4v12H3V4zm10 0h4v12h-4V4zM8 4h4v12H8V4z" opacity="0.25"/>
+                <path d="M3 4h4v12H3V4zm10 0h4v12h-4V4z"/>
+                <path d="M5 7l-2 3 2 3M15 7l2 3-2 3" strokeWidth="1.5" stroke="currentColor" fill="none" strokeLinecap="round"/>
               </svg>
             </ControlButton>
           </Controls>

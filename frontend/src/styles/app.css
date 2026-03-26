@@ -812,6 +812,9 @@ body.theme-dark .landing-input-wrapper:focus-within {
   font-size: 0.75rem;
   line-height: 1.3;
   color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .discourse-node__answer {
@@ -819,7 +822,7 @@ body.theme-dark .landing-input-wrapper:focus-within {
   color: var(--text-3);
   font-weight: 400;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -3032,6 +3035,7 @@ body.theme-dark .landing-input-wrapper:focus-within {
 
 .lpanel-child-row--gc .lpanel-child-label {
   font-size: 0.76rem;
+  font-weight: 400;
 }
 
 /* Override connector offsets for gc rows */
