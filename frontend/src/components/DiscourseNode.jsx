@@ -13,6 +13,7 @@ export default function DiscourseNode({ data }) {
   const {
     aspect,
     answer,
+    description,
     is_ghost,
     is_loading,
     isRoot,
@@ -65,7 +66,7 @@ export default function DiscourseNode({ data }) {
         <>
           <span className="discourse-node__label">{aspect}</span>
           {answer && !isRoot && !isFocus && isTerminal && !hideAnswer && (
-            <span className="discourse-node__answer">{answer}</span>
+            <span className="discourse-node__answer">{description || answer}</span>
           )}
         </>
       )}

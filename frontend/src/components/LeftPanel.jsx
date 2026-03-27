@@ -186,6 +186,12 @@ export default function LeftPanel({
               )}
             </>
           )}
+          {inlineAddParentId !== focusNodeId && (
+            <button
+              className="lpanel-add-inline-btn"
+              onClick={() => { setInlineAddParentId(focusNodeId); setInlineAddText(""); }}
+            >+ Add Aspect</button>
+          )}
         </div>
       </div>
     </div>
@@ -253,7 +259,7 @@ function NavCard({
   const isSelected = selectedNodeId === node.id;
   const isHoveredByCanvas = hoveredNodeId === node.id;
   const isMoveTarget = movingNodeId && movingNodeId !== node.id;
-  const showActions = (isSelected || hovered) && !isSelf && depth === 0;
+  const showActions = (isSelected || hovered || exploringNodeId === node.id) && !isSelf && depth === 0;
 
   const grandchildren = (showGrandchildren && depth === 0)
     ? (node.children || []).filter(c => !c.is_ghost && !c.is_loading)
@@ -337,7 +343,7 @@ function NavCard({
           <span className="lpanel-child-label">{node.aspect}</span>
         </div>
         {depth === 0 && (isAnswered ? (
-          <span className="lpanel-child-question">{node.answer}</span>
+          <span className="lpanel-child-question">{node.description || node.answer}</span>
         ) : node.question ? (
           <span className="lpanel-child-question">{node.question}</span>
         ) : null)}

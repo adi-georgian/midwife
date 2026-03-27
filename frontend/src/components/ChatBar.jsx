@@ -67,6 +67,7 @@ export default function ChatBar({
   function handleInputFocus() {
     if (!expanded) {
       setExpanded(true);
+      onNewThread?.();
     }
   }
 

@@ -25,11 +25,11 @@ export async function createSession(objective, background = {}) {
   });
 }
 
-export async function answerAspect(sessionId, aspectId, answer) {
+export async function answerAspect(sessionId, aspectId, answer, description = null) {
   return apiFetch(`/session/${sessionId}/answer/${aspectId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ answer }),
+    body: JSON.stringify({ answer, ...(description !== null ? { description } : {}) }),
   });
 }
 

@@ -771,14 +771,21 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
       setEdges(prev => prev.map(e => ({ ...e, style: e.data?.baseStyle ?? e.style })));
       return;
     }
-    const parent = tree ? findParentNode(tree, hoveredNodeId) : null;
-    const parentId = parent?.id ?? null;
+    // Highlight full ancestor path from root to hovered node
+    const path = tree ? findPath(tree, hoveredNodeId) : null;
+    const pathIds = path ? path.map(p => p.id) : [];
+    const pathSet = new Set(pathIds);
+    // Build set of consecutive parent→child pairs on the path
+    const pathEdgePairs = new Set();
+    for (let i = 0; i < pathIds.length - 1; i++) {
+      pathEdgePairs.add(`${pathIds[i]}|${pathIds[i + 1]}`);
+    }
     setNodes(prev => prev.map(n => ({
       ...n,
-      data: { ...n.data, isDimmed: n.id !== hoveredNodeId && n.id !== parentId && n.id !== exploringNodeId },
+      data: { ...n.data, isDimmed: !pathSet.has(n.id) && n.id !== exploringNodeId },
     })));
     setEdges(prev => prev.map(e => {
-      const isHighlighted = parentId && e.source === parentId && e.target === hoveredNodeId;
+      const isHighlighted = pathEdgePairs.has(`${e.source}|${e.target}`) || pathEdgePairs.has(`${e.target}|${e.source}`);
       const base = e.data?.baseStyle ?? e.style;
       if (isHighlighted) {
         return { ...e, style: { ...base, stroke: "#8480E8", strokeWidth: 2.5, opacity: 1, strokeDasharray: undefined } };
@@ -901,13 +908,15 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
 
   async function handleAnswer(answer) {
     const node = interviewQueue[interviewIndex];
+    let description;
     try {
-      await answerAspect(sessionId, node.id, answer);
+      const resp = await answerAspect(sessionId, node.id, answer);
+      description = resp?.description ?? null;
     } catch (err) {
       setApiError(err.message);
       return;
     }
-    setTree(prev => patchNode(prev, node.id, { answer }));
+    setTree(prev => patchNode(prev, node.id, { answer, ...(description ? { description } : {}) }));
     setInterviewQueue(prev => prev.map(n => n.id === node.id ? { ...n, answer } : n));
 
     // Reset chatAnswerCleared when moving to a new question
@@ -925,7 +934,14 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
             const oldNode = findNode(prev, u.id);
             return { id: u.id, oldLabel: oldNode?.aspect || u.id, newLabel: u.new_aspect };
           });
-          setPendingRelabelings(prev => [...prev, ...changes]);
+          setPendingRelabelings(prev => {
+            const merged = [...prev];
+            for (const c of changes) {
+              const idx = merged.findIndex(p => p.id === c.id);
+              if (idx >= 0) merged[idx] = c; else merged.push(c);
+            }
+            return merged;
+          });
           return prev; // don't apply yet — wait for user approval
         });
       }
@@ -945,7 +961,9 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
   function handleSaveAndPrev(currentAnswer) {
     if (currentAnswer) {
       const node = interviewQueue[interviewIndex];
-      answerAspect(sessionId, node.id, currentAnswer);
+      answerAspect(sessionId, node.id, currentAnswer).then(resp => {
+        if (resp?.description) setTree(prev => patchNode(prev, node.id, { answer: currentAnswer, description: resp.description }));
+      });
       setTree(prev => patchNode(prev, node.id, { answer: currentAnswer }));
       setInterviewQueue(prev => prev.map(n => n.id === node.id ? { ...n, answer: currentAnswer } : n));
     }
@@ -955,7 +973,9 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
   function handleSaveAndNext(currentAnswer) {
     if (currentAnswer) {
       const node = interviewQueue[interviewIndex];
-      answerAspect(sessionId, node.id, currentAnswer);
+      answerAspect(sessionId, node.id, currentAnswer).then(resp => {
+        if (resp?.description) setTree(prev => patchNode(prev, node.id, { answer: currentAnswer, description: resp.description }));
+      });
       setTree(prev => patchNode(prev, node.id, { answer: currentAnswer }));
       setInterviewQueue(prev => prev.map(n => n.id === node.id ? { ...n, answer: currentAnswer } : n));
     }
@@ -1240,10 +1260,12 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
   }
 
   async function handleUseAsAnswer(aspectId, content) {
+    let description;
     try {
-      await answerAspect(sessionId, aspectId, content);
+      const resp = await answerAspect(sessionId, aspectId, content);
+      description = resp?.description ?? null;
     } catch (err) { setApiError(err.message); return; }
-    setTree(prev => patchNode(prev, aspectId, { answer: content }));
+    setTree(prev => patchNode(prev, aspectId, { answer: content, ...(description ? { description } : {}) }));
     setChatThreads(prev =>
       prev.map(t => t.aspectId === aspectId ? { ...t, resolvedAnswerFor: aspectId } : t)
     );
@@ -1318,6 +1340,38 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
     <div className="app-layout">
       <div className="canvas-header">
         <span className="canvas-brand" onClick={onHome} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onHome?.()}>midWife</span>
+        <div className="canvas-header-actions">
+          <button className="canvas-header-btn" onClick={handleExport}>↓ Export</button>
+          <div style={{ position: "relative" }}>
+            <button
+              ref={settingsBtnRef}
+              className="canvas-header-btn"
+              onClick={() => setSettingsOpen(o => !o)}
+              title="Settings"
+            >
+              Settings ⚙
+            </button>
+            {settingsOpen && (
+              <div className="settings-panel" ref={settingsPanelRef}>
+                <div className="settings-row">
+                  <label>Graph View</label>
+                  <select value={viewMode} onChange={e => setViewMode(e.target.value)}>
+                    <option value="children">Focus Only</option>
+                    <option value="grandchildren">Show Grandchildren</option>
+                    <option value="full">Full Graph</option>
+                  </select>
+                </div>
+                <div className="settings-row">
+                  <label>Theme</label>
+                  <select value={theme} onChange={e => setTheme(e.target.value)}>
+                    <option value="sepia">Sepia</option>
+                    <option value="dark">Dark</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
       {focusNodeId !== "root" && (
         <div className="canvas-breadcrumbs-bar">
@@ -1375,36 +1429,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
 
         <div className="canvas-float-actions">
           <button className="canvas-float-btn" onClick={() => rfRef.current?.fitView({ padding: 0.15, duration: 300 })}><span style={{fontSize:"1rem",lineHeight:1}}>⤢</span> Fit</button>
-          <button className="canvas-float-btn" onClick={handleExport}>↓ Export</button>
-          <div style={{ position: "relative" }}>
-            <button
-              ref={settingsBtnRef}
-              className="canvas-float-btn"
-              onClick={() => setSettingsOpen(o => !o)}
-              title="Settings"
-            >
-              Settings ⚙
-            </button>
-            {settingsOpen && (
-              <div className="settings-panel" ref={settingsPanelRef}>
-                <div className="settings-row">
-                  <label>Graph View</label>
-                  <select value={viewMode} onChange={e => setViewMode(e.target.value)}>
-                    <option value="children">Focus Only</option>
-                    <option value="grandchildren">Show Grandchildren</option>
-                    <option value="full">Full Graph</option>
-                  </select>
-                </div>
-                <div className="settings-row">
-                  <label>Theme</label>
-                  <select value={theme} onChange={e => setTheme(e.target.value)}>
-                    <option value="sepia">Sepia</option>
-                    <option value="dark">Dark</option>
-                  </select>
-                </div>
-              </div>
-            )}
-          </div>
+          <button className="canvas-float-btn" onClick={() => { rebuildLayout(); setGraphVersion(v => v + 1); }}>↺ Reset</button>
         </div>
 
         <div className="canvas-float-actions-right">

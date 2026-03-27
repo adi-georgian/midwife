@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 
 import anthropic as _anthropic
@@ -5,7 +6,7 @@ from fastapi import FastAPI, HTTPException
 from google.genai.errors import ClientError, ServerError
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.interview import generate_chat_label, generate_chat_reply, generate_discourse_name, generate_panel_tabs, generate_questions, recontextualize_ancestors
+from backend.interview import generate_aspect_description, generate_chat_label, generate_chat_reply, generate_discourse_name, generate_panel_tabs, generate_questions, recontextualize_ancestors
 from backend.models import (
     AddAspectRequest,
     AspectNode,
@@ -132,9 +133,19 @@ async def answer_aspect(
         raise HTTPException(status_code=404, detail="Aspect not found")
 
     node.answer = request.answer
-    store.save_session(session)
+    if request.description is not None:
+        # Frontend provided a pre-computed description (e.g. from chat flow)
+        node.description = request.description
+        store.save_session(session)
+        return {"status": "ok", "aspect_id": aspect_id, "answer": request.answer, "description": request.description}
 
-    return {"status": "ok", "aspect_id": aspect_id, "answer": request.answer}
+    # Generate description synchronously (fast single-sentence call)
+    desc = await asyncio.get_event_loop().run_in_executor(
+        None, generate_aspect_description, node.aspect, node.question or "", request.answer
+    )
+    node.description = desc
+    store.save_session(session)
+    return {"status": "ok", "aspect_id": aspect_id, "answer": request.answer, "description": desc}
 
 
 @app.post(

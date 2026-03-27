@@ -208,13 +208,32 @@ def _mode_instructions(mode: str) -> str:
     return "\n\n".join(parts)
 
 
+def generate_aspect_description(aspect: str, question: str, answer: str) -> str:
+    """Generate a one-sentence contextualized description that weaves the question and answer together.
+
+    E.g. aspect='Gift Collection', question='How should guests handle gifts?', answer='bring gifts on the day'
+    → 'Guests will bring gifts on the day of the event.'
+    """
+    system = (
+        "You are a concise planning assistant. Write a single short sentence (max 15 words) "
+        "that contextualizes the given answer within the topic and question. "
+        "Use third-person present tense. Do not start with the aspect name. "
+        "Output only the sentence, no punctuation changes, no extra text."
+    )
+    prompt = f"Topic: {aspect}\nQuestion: {question}\nAnswer: {answer}\nDescription:"
+    try:
+        return _generate_text(system, prompt, temperature=0.3, max_tokens=60).strip().strip('"')
+    except Exception:
+        return answer
+
+
 CHAT_SYSTEM = """You are Midwife, a Socratic planning assistant embedded in the user's planning session.
 Help the user think through the specific aspect they are unsure about.
 Ask follow-up questions if they need help clarifying their thinking.
 Keep responses concise (2-4 sentences). Be warm and practical.
 Always respond with valid JSON only:
 {"reply": "...", "suggested_answer": null, "suggested_answers": [], "new_aspects": [], "updated_aspect": null, "updated_question": null}
-- If the user has clearly settled on exactly ONE specific answer, extract it as suggested_answer (short phrase). Leave null otherwise.
+- If the user has clearly settled on exactly ONE specific answer, extract it as suggested_answer (short phrase). If they selected one of the pre-defined options, use the EXACT option text as given — never paraphrase, rename, or rephrase it. Leave null if no clear answer.
 - If the user explicitly wants to select TWO OR MORE distinct options together (multi-select), leave suggested_answer null and instead list each option separately in suggested_answers (e.g. ["Option A", "Option B"]). Leave as empty list if zero or one option.
 - If the conversation surfaces new distinct planning dimensions that deserve their own node in the discourse tree (a new concern, constraint, or decision the user raised), list them in new_aspects as:
   [{"aspect": "2-5 word label", "question": "the Socratic question to ask", "suggestions": ["option1", "option2", "option3"]}]
@@ -373,6 +392,7 @@ def generate_chat_reply(
             f"or help them articulate their own answer if none fit. "
             f"As soon as the conversation points to a clear answer (even rough), "
             f"set suggested_answer to a short phrase that captures it. "
+            f"IMPORTANT: If the answer matches one of the pre-defined options, use that option's EXACT text — never paraphrase it. "
             f"Keep new_aspects as an empty list unless the user themselves explicitly raises "
             f"a genuinely new and distinct concern — do not proactively suggest sub-topics."
         )
@@ -433,15 +453,18 @@ def recontextualize_ancestors(objective: str, ancestors: list[dict], mode: str =
         "You are a planning assistant reviewing discourse tree labels. "
         "For each ancestor node provided, check if its label still accurately represents the topic "
         "given all of its children's aspects and answers. "
-        "If any ancestor's label no longer fits (too narrow, too broad, or misleading), suggest a better 2-5 word label. "
+        "If an ancestor's label is genuinely confusing or misleading given its children, suggest a better 2-5 word label. "
+        "Be very conservative: suggest a relabeling ONLY if the current label is clearly wrong — not merely imprecise. "
+        "When you do relabel, always make the new label MORE GENERAL than the old one, never more specific. "
+        "Aim for 0 relabelings per call. Only 1 if truly necessary. Never suggest more than 1. "
         "Also, if any child's content seems like a genuinely separate top-level concern, suggest it as a spinoff. "
         "Respond with valid JSON only: "
         "{\"updated_ancestors\": [{\"id\": \"...\", \"new_aspect\": \"...\"}], "
         "\"spinoff_suggestions\": [{\"child_id\": \"...\", \"suggested_label\": \"...\", \"suggested_question\": \"...\", "
         "\"suggestions\": [\"...\", \"...\", \"...\"]}]} "
         "For each spinoff, include 3-4 short first-person answer options in 'suggestions' (e.g. 'Under $500', 'Not sure yet'). "
-        "Only include nodes in updated_ancestors if their label actually needs changing. "
-        "Keep both lists empty if nothing needs updating."
+        "Only include nodes in updated_ancestors if the label is actively misleading. "
+        "Keep both lists empty if there is any doubt."
     )
     if mode:
         instr = _mode_instructions(mode)

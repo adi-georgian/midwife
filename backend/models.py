@@ -9,6 +9,7 @@ class AspectNode(BaseModel):
     importance: float = 0.5
     suggestions: list[str]
     answer: str | None = None
+    description: str | None = None
     is_ghost: bool = False
     children: list["AspectNode"] = []
 
@@ -81,6 +82,7 @@ class CreateSessionResponse(BaseModel):
 
 class AnswerRequest(BaseModel):
     answer: str
+    description: str | None = None
 
 
 class ElaborateResponse(BaseModel):
