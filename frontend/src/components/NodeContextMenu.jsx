@@ -24,7 +24,7 @@ export default function NodeContextMenu({ node, x, y, onExplore, onAddChild, onD
 
   return (
     <div ref={menuRef} className="node-context-menu" style={{ left: x, top: y }}>
-      <button onClick={() => { onClose(); onExplore(node.id); }}>Flesh Out</button>
+      <button onClick={() => { onClose(); onExplore(node.id); }}>{node.data?.answer ? "Flesh Out" : "Answer"}</button>
       <button onClick={() => { onClose(); onAddChild(node.id); }}>Add child</button>
       <button onClick={() => { onClose(); onMove(node.id); }}>Move</button>
       <button

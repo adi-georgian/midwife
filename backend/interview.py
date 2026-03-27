@@ -14,6 +14,13 @@ from google.genai.errors import ClientError, ServerError
 load_dotenv()
 
 client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+
+
+def _trunc(text: str, max_chars: int = 120) -> str:
+    """Truncate text for LLM prompt inclusion to avoid token bloat."""
+    if not text or len(text) <= max_chars:
+        return text
+    return text[:max_chars].rstrip() + "…"
 # Models tried in order; first healthy one wins.
 GEMINI_MODELS = [
     "gemini-2.0-flash",
@@ -40,8 +47,13 @@ def _call_claude_with_retry(fn, max_attempts=3):
                 raise
 
 
-def _generate_text(system: str, prompt_or_messages, temperature: float = 0.7, max_tokens: int = 2048) -> str:
-    """Try Claude Haiku first, then fall back to Gemini models."""
+def _generate_text(system: str, prompt_or_messages, temperature: float = 0.7, max_tokens: int = 2048, response_schema=None) -> str:
+    """Try Claude Haiku first, then fall back to Gemini models.
+
+    response_schema: optional dict describing the expected JSON shape. When provided,
+    Gemini is instructed to emit application/json constrained to that schema, which
+    prevents malformed-JSON responses at the sampling level.
+    """
     if isinstance(prompt_or_messages, str):
         gemini_contents = prompt_or_messages
         claude_messages = [{"role": "user", "content": prompt_or_messages}]
@@ -75,16 +87,42 @@ def _generate_text(system: str, prompt_or_messages, temperature: float = 0.7, ma
 
     for model in GEMINI_MODELS:
         try:
+            gemini_config = types.GenerateContentConfig(
+                system_instruction=system,
+                temperature=temperature,
+                **({"response_mime_type": "application/json", "response_schema": response_schema}
+                   if response_schema else {}),
+            )
             return client.models.generate_content(
                 model=model,
                 contents=gemini_contents,
-                config=types.GenerateContentConfig(system_instruction=system, temperature=temperature),
+                config=gemini_config,
             ).text.strip()
         except (ClientError, ServerError) as e:
             logger.warning("Gemini model %s failed: %s", model, e)
             continue
 
     raise RuntimeError("All models failed (Claude and all Gemini fallbacks).")
+
+# JSON schema for the generate_questions response — used to force valid JSON from Gemini.
+_ASPECTS_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "aspects": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "aspect":      {"type": "STRING"},
+                    "question":    {"type": "STRING"},
+                    "suggestions": {"type": "ARRAY", "items": {"type": "STRING"}},
+                },
+                "required": ["aspect", "question", "suggestions"],
+            },
+        },
+    },
+    "required": ["aspects"],
+}
 
 SYSTEM_INSTRUCTION_BASE = """
 You are a planning assistant using the Socratic method to help users think through decisions.
@@ -314,7 +352,7 @@ def generate_chat_reply(
     if answered_aspects:
         system += "\n\nThe following aspects have already been decided in this planning session — treat these as established facts:\n"
         for a in answered_aspects:
-            system += f"- {a['aspect']}: {a['answer']}\n"
+            system += f"- {_trunc(a['aspect'])}: {_trunc(a['answer'])}\n"
     if existing_aspects:
         system += (
             "\n\nAspects already in the discourse tree "
@@ -412,9 +450,9 @@ def recontextualize_ancestors(objective: str, ancestors: list[dict], mode: str =
 
     prompt = f"Objective: {objective}\n\nAncestor nodes to review:\n"
     for anc in ancestors:
-        prompt += f"\nNode ID: {anc['id']}\nLabel: {anc['aspect']}\nChildren:\n"
+        prompt += f"\nNode ID: {anc['id']}\nLabel: {_trunc(anc['aspect'])}\nChildren:\n"
         for child in anc.get("children", []):
-            prompt += f"  - {child['aspect']}: {child.get('answer', '(unanswered)')}\n"
+            prompt += f"  - {_trunc(child['aspect'])}: {_trunc(child.get('answer', '(unanswered)'))}\n"
 
     try:
         raw = _generate_text(system, prompt, temperature=0.3)
@@ -488,9 +526,9 @@ def generate_questions(
         context_text += "Context (the path through the user's planning tree to the current focus):\n"
         for i, node in enumerate(context_path):
             indent = "  " * i
-            context_text += f"{indent}Aspect: {node['aspect']}\n"
-            context_text += f"{indent}Question: {node['question']}\n"
-            context_text += f"{indent}Answer: {node['answer']}\n\n"
+            context_text += f"{indent}Aspect: {_trunc(node['aspect'])}\n"
+            context_text += f"{indent}Question: {_trunc(node['question'])}\n"
+            context_text += f"{indent}Answer: {_trunc(node['answer'])}\n\n"
         context_text += f"Generate {max_questions} sub-questions that dig deeper into the innermost topic above."
 
     if len(context_path or []) > 1:
@@ -513,12 +551,18 @@ def generate_questions(
 
     prompt = f"Objective: {objective}\n\n{context_text}"
 
-    text = _generate_text(system_instruction, prompt, temperature=0.7)
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1]
-    if text.endswith("```"):
-        text = text.rsplit("```", 1)[0]
-    text = text.strip()
-
-    data = json.loads(text)
-    return data["aspects"]
+    for attempt in range(2):
+        text = _generate_text(system_instruction, prompt, temperature=0.7, response_schema=_ASPECTS_SCHEMA)
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1]
+        if text.endswith("```"):
+            text = text.rsplit("```", 1)[0]
+        text = text.strip()
+        try:
+            data = json.loads(text)
+            return data["aspects"]
+        except json.JSONDecodeError:
+            if attempt == 0:
+                logger.warning("generate_questions: malformed JSON on attempt 1, retrying")
+                continue
+            raise RuntimeError("The AI returned a malformed response. Please try again.")

@@ -25,6 +25,7 @@ export default function DiscourseNode({ data }) {
     isDimmed,
     sourcePosition,
     targetPosition,
+    nodeWidth,
   } = data;
 
   let nodeClass = "discourse-node";
@@ -56,6 +57,7 @@ export default function DiscourseNode({ data }) {
   return (
     <div
       className={nodeClass}
+      style={nodeWidth ? { width: nodeWidth } : undefined}
       title={!is_ghost && !is_loading && !isGhostDisplay && aspect ? aspect : undefined}
     >
       {renderHandles()}

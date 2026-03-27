@@ -353,7 +353,7 @@ function NavCard({
                 onClick={e => { e.stopPropagation(); onExplore(node.id); }}
                 disabled={exploringNodeId === node.id}
               >
-                {exploringNodeId === node.id ? <span className="lpanel-spinner" /> : "Explore"}
+                {exploringNodeId === node.id ? <span className="lpanel-spinner" /> : (node.answer ? "Explore" : "Answer")}
               </button>
               <button onClick={e => { e.stopPropagation(); setInlineAddParentId(node.id); setInlineAddText(""); }}>+ Sub-Aspect</button>
             </div>

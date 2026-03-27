@@ -31,6 +31,7 @@
   --overlay-bg:       rgba(17, 17, 16, 0.48);
   --card-shadow:      0 20px 60px rgba(17, 17, 16, 0.10);
   --dot-color:        #DDDDD6;
+  --canvas-bg:        #F5EFE4;   /* soft warm canvas, distinct from --bg */
   --green-btn:        #16A34A;
   --green-btn-hover:  #15803D;
   --choose-btn:       #22C55E;
@@ -43,15 +44,15 @@
 
 body.theme-dark {
   /* Midnight Scholar (dark) */
-  --bg:               #0F1117;   /* deep navy-charcoal */
-  --surface:          #1A1D27;   /* panel surfaces */
-  --surface-alt:      #242836;   /* inputs / alt surfaces */
-  --border:           #2A2D3E;   /* dark navy border */
-  --border-light:     #1E2130;   /* very subtle */
+  --bg:               #1C1F2B;   /* deep navy-charcoal */
+  --surface:          #252838;   /* panel surfaces */
+  --surface-alt:      #2E3244;   /* inputs / alt surfaces */
+  --border:           #383C54;   /* dark navy border */
+  --border-light:     #272A3C;   /* very subtle */
   --border-hover:     #8480E8;   /* muted indigo on hover */
-  --text-1:           #F0F0F8;   /* near white with blue tint */
-  --text-2:           #9498B4;   /* muted blue-gray */
-  --text-3:           #5C6080;   /* dimmer */
+  --text-1:           #D8DCF0;   /* softened off-white */
+  --text-2:           #8A8FA8;   /* muted blue-gray */
+  --text-3:           #5A5F7A;   /* dimmer */
   --accent-bg:        #8480E8;   /* muted indigo */
   --accent-text:      #FFFFFF;
   --accent-hover:     #7370D6;
@@ -71,7 +72,8 @@ body.theme-dark {
   --node-focus-text:  #FFFFFF;
   --overlay-bg:       rgba(0, 0, 0, 0.65);
   --card-shadow:      0 20px 60px rgba(0, 0, 0, 0.55);
-  --dot-color:        #1E2130;
+  --dot-color:        #252838;
+  --canvas-bg:        #161924;   /* slightly darker than --bg for canvas */
   --green-btn:        #16A34A;
   --green-btn-hover:  #15803D;
   --choose-btn:       #22C55E;
@@ -676,7 +678,7 @@ body.theme-dark .landing-input-wrapper:focus-within {
 }
 
 .react-flow__background {
-  background-color: var(--bg) !important;
+  background-color: var(--canvas-bg) !important;
 }
 
 /* --- Discourse Node (mindmap style) --- */
@@ -696,7 +698,7 @@ body.theme-dark .landing-input-wrapper:focus-within {
   transition: box-shadow 0.15s, border-color 0.15s;
   min-height: 44px;
   justify-content: center;
-  max-width: 200px;
+  max-width: 240px;
 }
 
 /* Hide handle dots — handles still exist for routing */

@@ -29,6 +29,7 @@ const NODE_TYPES = { discourseNode: DiscourseNode };
 
 const H_STEP = 180;
 const PARENT_Y = 120;
+const MAX_NODE_WIDTH = 240;  // hard cap for column-width uniformity
 
 // Layout spacing constants (used for initial rough positions in buildGraphElements)
 const MIN_CHILD_H = 90;    // minimum height allocated per child
@@ -36,12 +37,12 @@ const GC_H = 75;           // vertical space allocated per grandchild
 const GGC_H = 55;          // vertical space allocated per great-grandchild
 
 // Measured layout constants — legacy manual layout
-const MINDMAP_GAP_H = 40;
+const MINDMAP_GAP_H = 70;
 const MINDMAP_GAP_V = 20;
-const MINDMAP_ARM = 240;
+const MINDMAP_ARM = 300;
 
 // Dagre layout constants
-const DAGRE_RANKSEP = 120;  // horizontal gap between levels — needs room for bezier curves
+const DAGRE_RANKSEP = 60;  // horizontal gap between levels — needs room for bezier curves
 const DAGRE_NODESEP = 20;   // vertical gap between siblings
 
 function normAspect(node) {
@@ -150,7 +151,8 @@ function buildGraphElements(tree, interviewingId, focusNodeId, viewMode) {
   const rightNaturalH = rightChildren.reduce((s, c) => s + childHeight(c, viewMode), 0);
   const sharedTotalH = Math.max(leftNaturalH, rightNaturalH);
 
-  function placeChildSide(sideChildren, xSign) {
+  function placeChildSide(sideChildren, xSign, depth) {
+    const side = xSign < 0 ? "left" : "right";
     const srcHandle = xSign < 0 ? "left" : "right";
     const tgtHandle = xSign < 0 ? "right-t" : "left-t";
     const srcPos = xSign < 0 ? "left" : "right";
@@ -178,11 +180,12 @@ function buildGraphElements(tree, interviewingId, focusNodeId, viewMode) {
         position: { x: xSign * H_STEP, y },
         data: {
           ...child,
+          columnId: `${side}-${depth}`,
           isInterviewing: child.id === interviewingId,
           sourcePosition: srcPos,
           targetPosition: tgtPos,
           isTerminal: childIsTerminal,
-          hideAnswer: viewMode === "full",
+          hideAnswer: false,
           isDimmed: false,
         },
       });
@@ -213,11 +216,12 @@ function buildGraphElements(tree, interviewingId, focusNodeId, viewMode) {
           position: { x: xSign * 2 * H_STEP, y: gcY },
           data: {
             ...gc,
+            columnId: `${side}-${depth + 1}`,
             isInterviewing: gc.id === interviewingId,
             sourcePosition: srcPos,
             targetPosition: tgtPos,
             isTerminal: gcIsTerminal,
-            hideAnswer: viewMode === "full",
+            hideAnswer: false,
             isDimmed: false,
           },
         });
@@ -245,6 +249,7 @@ function buildGraphElements(tree, interviewingId, focusNodeId, viewMode) {
               position: { x: xSign * 3 * H_STEP, y: ggcY },
               data: {
                 ...ggc,
+                columnId: `${side}-${depth + 2}`,
                 isInterviewing: ggc.id === interviewingId,
                 sourcePosition: srcPos,
                 targetPosition: tgtPos,
@@ -270,8 +275,8 @@ function buildGraphElements(tree, interviewingId, focusNodeId, viewMode) {
     });
   }
 
-  placeChildSide(leftChildren, -1);
-  placeChildSide(rightChildren, 1);
+  placeChildSide(leftChildren, -1, 1);
+  placeChildSide(rightChildren, 1, 1);
 
   return { nodes, edges };
 }
@@ -383,7 +388,24 @@ function buildOverviewContent(objective, background) {
 
 // ── Measured layout ───────────────────────────────────────────────────────────
 
-function computeMindmapLayout(rfNodes, rfEdges, focusId) {
+// Returns { nodeId → uniformWidth } for nodes with a columnId.
+// All nodes in the same column share the width of the widest, capped at MAX_NODE_WIDTH.
+function computeColumnWidths(rfNodes) {
+  const groups = {};
+  for (const n of rfNodes) {
+    const col = n.data?.columnId;
+    if (!col || !n.measured?.width) continue;
+    (groups[col] ??= []).push(n);
+  }
+  const nodeWidths = {};
+  for (const nodes of Object.values(groups)) {
+    const w = Math.min(Math.max(...nodes.map(n => n.measured.width)), MAX_NODE_WIDTH);
+    for (const n of nodes) nodeWidths[n.id] = w;
+  }
+  return nodeWidths;
+}
+
+function computeMindmapLayout(rfNodes, rfEdges, focusId, nodeWidths = {}) {
   // All nodes must be measured before we can do a proper layout
   if (rfNodes.some(n => !n.measured)) return null;
 
@@ -423,7 +445,7 @@ function computeMindmapLayout(rfNodes, rfEdges, focusId) {
 
     for (const node of group) {
       const nh = node.measured.height;
-      const nw = node.measured.width;
+      const nw = nodeWidths[node.id] ?? node.measured.width;
       const nx = getNodeX(nw);
       positions[node.id] = { x: nx, y };
 
@@ -467,7 +489,7 @@ function computeMindmapLayout(rfNodes, rfEdges, focusId) {
   return positions;
 }
 
-function computeDagreLayout(rfNodes, rfEdges, focusId) {
+function computeDagreLayout(rfNodes, rfEdges, focusId, nodeWidths = {}) {
   if (rfNodes.some(n => !n.measured)) return null;
 
   const byId = Object.fromEntries(rfNodes.map(n => [n.id, n]));
@@ -515,7 +537,7 @@ function computeDagreLayout(rfNodes, rfEdges, focusId) {
     g.setNode(focusId, { width: fw, height: fh });
 
     const subtreeNodes = collectSubtree(sideKids);
-    subtreeNodes.forEach(n => g.setNode(n.id, { width: n.measured.width, height: n.measured.height }));
+    subtreeNodes.forEach(n => g.setNode(n.id, { width: nodeWidths[n.id] ?? n.measured.width, height: n.measured.height }));
 
     sideKids.forEach(kid => g.setEdge(focusId, kid.id));
     subtreeNodes.forEach(n => {
@@ -533,8 +555,9 @@ function computeDagreLayout(rfNodes, rfEdges, focusId) {
     subtreeNodes.forEach(n => {
       const dp = g.node(n.id);
       if (!dp) return;
+      const nw = nodeWidths[n.id] ?? n.measured.width;
       raw[n.id] = {
-        x: (dp.x - fp.x) + fw / 2 - n.measured.width / 2,
+        x: (dp.x - fp.x) + fw / 2 - nw / 2,
         y: (dp.y - fp.y) + fh / 2 - n.measured.height / 2,
       };
     });
@@ -563,8 +586,8 @@ function computeDagreLayout(rfNodes, rfEdges, focusId) {
       if (direction === "LR") {
         // Right side: align right edges — grandchildren always sit further right
         // than any sibling, preventing a wide sibling from reaching into deeper ranks.
-        const maxRight = Math.max(...rankNodes.map(n => raw[n.id].x + n.measured.width));
-        rankNodes.forEach(n => { positions[n.id] = { x: maxRight - n.measured.width, y: raw[n.id].y }; });
+        const maxRight = Math.max(...rankNodes.map(n => raw[n.id].x + (nodeWidths[n.id] ?? n.measured.width)));
+        rankNodes.forEach(n => { positions[n.id] = { x: maxRight - (nodeWidths[n.id] ?? n.measured.width), y: raw[n.id].y }; });
       } else {
         // Left side: align left edges to the leftmost node in the rank.
         // This ensures grandchildren always sit further from the focus than any
@@ -588,15 +611,15 @@ function computeDagreLayout(rfNodes, rfEdges, focusId) {
   return positions;
 }
 
-function AutoLayout({ focusNodeId, layoutEngine }) {
+function AutoLayout({ focusNodeId, layoutEngine, graphVersion }) {
   const { getNodes, getEdges, setNodes, fitView } = useReactFlow();
   const nodesInitialized = useNodesInitialized();
   const layoutKeyRef = useRef(null);
 
-  // Always re-layout when focus changes, even if node measurements are identical
+  // Reset layout key whenever focus changes OR the graph is rebuilt (tree/viewMode change)
   useEffect(() => {
     layoutKeyRef.current = null;
-  }, [focusNodeId]);
+  }, [focusNodeId, graphVersion]);
 
   useEffect(() => {
     if (!nodesInitialized) return;
@@ -611,17 +634,26 @@ function AutoLayout({ focusNodeId, layoutEngine }) {
     if (key === layoutKeyRef.current) return;
     layoutKeyRef.current = key;
 
+    const nodeWidths = computeColumnWidths(rfNodes);
+
     const newPositions = layoutEngine === "dagre"
-      ? computeDagreLayout(rfNodes, rfEdges, focusNodeId)
-      : computeMindmapLayout(rfNodes, rfEdges, focusNodeId);
+      ? computeDagreLayout(rfNodes, rfEdges, focusNodeId, nodeWidths)
+      : computeMindmapLayout(rfNodes, rfEdges, focusNodeId, nodeWidths);
     if (!newPositions) return;
 
-    setNodes(prev => prev.map(n =>
-      newPositions[n.id] !== undefined ? { ...n, position: newPositions[n.id] } : n
-    ));
+    setNodes(prev => prev.map(n => {
+      const pos = newPositions[n.id];
+      const nw = nodeWidths[n.id];
+      if (pos === undefined && nw === undefined) return n;
+      return {
+        ...n,
+        ...(pos !== undefined ? { position: pos } : {}),
+        ...(nw !== undefined ? { data: { ...n.data, nodeWidth: nw } } : {}),
+      };
+    }));
 
     setTimeout(() => fitView({ padding: 0.15, duration: 300 }), 0);
-  }, [nodesInitialized, focusNodeId, layoutEngine]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [nodesInitialized, focusNodeId, layoutEngine, graphVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return null;
 }
@@ -686,6 +718,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [graphVersion, setGraphVersion] = useState(0);
 
   const rfRef = useRef(null);
 
@@ -715,8 +748,19 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
   useEffect(() => {
     if (!tree) return;
     const { nodes: n, edges: e } = buildGraphElements(tree, currentNode?.id, focusNodeId, viewMode);
-    setNodes(n);
+    // Carry over nodeWidth so nodes don't flash back to natural width on rebuild
+    setNodes(prev => {
+      const existingWidths = Object.fromEntries(
+        prev.filter(p => p.data?.nodeWidth).map(p => [p.id, p.data.nodeWidth])
+      );
+      return n.map(node =>
+        existingWidths[node.id]
+          ? { ...node, data: { ...node.data, nodeWidth: existingWidths[node.id] } }
+          : node
+      );
+    });
     setEdges(e);
+    setGraphVersion(v => v + 1);
     // AutoLayout handles fitView after measuring node dimensions
   }, [tree, currentNode?.id, focusNodeId, viewMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1358,13 +1402,6 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
                     <option value="dark">Dark</option>
                   </select>
                 </div>
-                <div className="settings-row">
-                  <label>Layout Engine</label>
-                  <select value={layoutEngine} onChange={e => setLayoutEngine(e.target.value)}>
-                    <option value="dagre">Dagre (new)</option>
-                    <option value="legacy">Legacy</option>
-                  </select>
-                </div>
               </div>
             )}
           </div>
@@ -1436,8 +1473,8 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
           minZoom={0.2}
           maxZoom={2}
         >
-          <AutoLayout focusNodeId={focusNodeId} layoutEngine={layoutEngine} />
-          <Background color={theme === "dark" ? "#2a2520" : "#d8c5aa"} gap={28} variant="dots" size={1} />
+          <AutoLayout focusNodeId={focusNodeId} layoutEngine={layoutEngine} graphVersion={graphVersion} />
+          <Background color={theme === "dark" ? "#252838" : "#D4C4B0"} gap={28} variant="dots" size={1} />
           <Controls showFitView={false}>
             <ControlButton
               onClick={() => { setLeftPanelOpen(false); setRightPanelOpen(false); }}
