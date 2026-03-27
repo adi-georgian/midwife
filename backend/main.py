@@ -133,19 +133,8 @@ async def answer_aspect(
         raise HTTPException(status_code=404, detail="Aspect not found")
 
     node.answer = request.answer
-    if request.description is not None:
-        # Frontend provided a pre-computed description (e.g. from chat flow)
-        node.description = request.description
-        store.save_session(session)
-        return {"status": "ok", "aspect_id": aspect_id, "answer": request.answer, "description": request.description}
-
-    # Generate description synchronously (fast single-sentence call)
-    desc = await asyncio.get_event_loop().run_in_executor(
-        None, generate_aspect_description, node.aspect, node.question or "", request.answer
-    )
-    node.description = desc
     store.save_session(session)
-    return {"status": "ok", "aspect_id": aspect_id, "answer": request.answer, "description": desc}
+    return {"status": "ok", "aspect_id": aspect_id, "answer": request.answer}
 
 
 @app.post(

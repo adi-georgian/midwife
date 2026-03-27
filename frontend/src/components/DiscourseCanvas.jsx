@@ -687,6 +687,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
   const [createChildParentId, setCreateChildParentId] = useState(null);
 
   const [hoveredNodeId, setHoveredNodeId] = useState(null);
+  const lastNodeClickRef = useRef({ nodeId: null, time: 0 });
 
   const [interviewPaused, setInterviewPaused] = useState(false);
   const [signoffParentId, setSignoffParentId] = useState(null);
@@ -748,10 +749,12 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
   useEffect(() => {
     if (!tree) return;
     const { nodes: n, edges: e } = buildGraphElements(tree, currentNode?.id, focusNodeId, viewMode);
-    // Carry over nodeWidth so nodes don't flash back to natural width on rebuild
+    // Carry over nodeWidth for non-column nodes only (focus, parent-preview).
+    // Column nodes must NOT carry over — they need to re-measure at natural width so
+    // computeColumnWidths can correctly pick the widest node in the column.
     setNodes(prev => {
       const existingWidths = Object.fromEntries(
-        prev.filter(p => p.data?.nodeWidth).map(p => [p.id, p.data.nodeWidth])
+        prev.filter(p => p.data?.nodeWidth && !p.data?.columnId).map(p => [p.id, p.data.nodeWidth])
       );
       return n.map(node =>
         existingWidths[node.id]
@@ -1041,6 +1044,16 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
     if (nodeData.isFocus || nodeData.isRoot) return;
 
     if (phase === "selecting") {
+      const now = Date.now();
+      const last = lastNodeClickRef.current;
+      if (last.nodeId === rfNode.id && now - last.time < 400) {
+        lastNodeClickRef.current = { nodeId: null, time: 0 };
+        setSelectedNodeId(null);
+        setLeftPanelOpen(true);
+        navigateTo(rfNode.id);
+        return;
+      }
+      lastNodeClickRef.current = { nodeId: rfNode.id, time: now };
       setSelectedNodeId(prev => prev === rfNode.id ? null : rfNode.id);
       setLeftPanelOpen(true);
     }
@@ -1050,7 +1063,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
     const nodeData = rfNode.data;
     if (nodeData.is_ghost || nodeData.isGhostDisplay || nodeData.is_loading) return;
     if (nodeData.isFocus || nodeData.isRoot) return;
-    if (nodeData.isParentPreview) return; // parent preview already navigates on single click
+    if (nodeData.isParentPreview) return;
     if (phase !== "selecting") return;
     setSelectedNodeId(null);
     setLeftPanelOpen(true);

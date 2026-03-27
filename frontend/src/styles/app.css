@@ -3287,6 +3287,12 @@ body.theme-dark .landing-input-wrapper:focus-within {
   color: var(--blue-badge-text);
 }
 
+.lpanel-focus-card--terminal {
+  background: var(--node-ans-bg);
+  color: var(--node-ans-text);
+  border: 1.5px solid var(--chip-sel-border);
+}
+
 .lpanel-focus-card--drag-over {
   outline: 2px dashed var(--blue-badge);
   outline-offset: 2px;
@@ -3313,6 +3319,37 @@ body.theme-dark .landing-input-wrapper:focus-within {
   font-size: 0.95rem;
   font-weight: 700;
   line-height: 1.3;
+}
+
+.lpanel-focus-description {
+  font-size: 0.78rem;
+  opacity: 0.75;
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+.lpanel-explore-standalone-btn {
+  background: var(--accent-bg);
+  color: var(--accent-text);
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  margin-top: 10px;
+  width: 100%;
+  text-align: center;
+}
+
+.lpanel-explore-standalone-btn:hover {
+  background: var(--accent-hover);
+}
+
+.lpanel-explore-standalone-btn:disabled {
+  opacity: 0.7;
+  cursor: default;
 }
 
 .lpanel-parent-link {
@@ -3440,22 +3477,28 @@ body.theme-dark .landing-input-wrapper:focus-within {
   margin-top: 10px;
   margin-left: 26px; /* align with cards inside the list (list padding-left 22px + list margin-left 4px) */
   padding: 8px 10px;
-  border: 1.5px dashed var(--border);
+  border: 1.5px dashed var(--blue-badge);
   border-radius: 6px;
   background: transparent;
-  color: var(--text-3);
+  color: var(--blue-badge);
   font-size: 0.82rem;
   font-family: inherit;
   cursor: pointer;
   text-align: center;
-  transition: border-color 0.15s, color 0.15s;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
   width: calc(100% - 26px);
   box-sizing: border-box;
 }
 
 .lpanel-add-inline-btn:hover {
+  background: var(--blue-badge);
   border-color: var(--blue-badge);
-  color: var(--blue-badge);
+  color: #fff;
+}
+
+.lpanel-add-inline-btn--terminal {
+  margin-left: 0;
+  width: 100%;
 }
 
 /* Collapse/expand button — floats on the right border of the nav panel */

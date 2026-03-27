@@ -371,7 +371,7 @@ def generate_chat_reply(
     if answered_aspects:
         system += "\n\nThe following aspects have already been decided in this planning session — treat these as established facts:\n"
         for a in answered_aspects:
-            system += f"- {_trunc(a['aspect'])}: {_trunc(a['answer'])}\n"
+            system += f"- {_trunc(a['aspect'])}: {a['answer']}\n"
     if existing_aspects:
         system += (
             "\n\nAspects already in the discourse tree "
@@ -475,7 +475,7 @@ def recontextualize_ancestors(objective: str, ancestors: list[dict], mode: str =
     for anc in ancestors:
         prompt += f"\nNode ID: {anc['id']}\nLabel: {_trunc(anc['aspect'])}\nChildren:\n"
         for child in anc.get("children", []):
-            prompt += f"  - {_trunc(child['aspect'])}: {_trunc(child.get('answer', '(unanswered)'))}\n"
+            prompt += f"  - {_trunc(child['aspect'])}: {child.get('answer', '(unanswered)')}\n"
 
     try:
         raw = _generate_text(system, prompt, temperature=0.3)
@@ -551,7 +551,7 @@ def generate_questions(
             indent = "  " * i
             context_text += f"{indent}Aspect: {_trunc(node['aspect'])}\n"
             context_text += f"{indent}Question: {_trunc(node['question'])}\n"
-            context_text += f"{indent}Answer: {_trunc(node['answer'])}\n\n"
+            context_text += f"{indent}Answer: {node['answer']}\n\n"
         context_text += f"Generate {max_questions} sub-questions that dig deeper into the innermost topic above."
 
     if len(context_path or []) > 1:

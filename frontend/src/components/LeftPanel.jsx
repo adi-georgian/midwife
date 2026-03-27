@@ -66,7 +66,13 @@ export default function LeftPanel({
             </div>
             <div className="lpanel-children-list">
               {signoffChildren.map(child => (
-                <SignoffCard key={child.id} node={child} onDelete={onDelete} />
+                <SignoffCard
+                  key={child.id}
+                  node={child}
+                  onDelete={onDelete}
+                  isHovered={hoveredNodeId === child.id}
+                  onHoverNode={onHoverNode}
+                />
               ))}
               {inlineAddParentId === signoffParent.id && (
                 <InlineAddInput
@@ -125,7 +131,7 @@ export default function LeftPanel({
         )}
         <div className="lpanel-tree-section">
           <div
-            className={`lpanel-focus-card${isRootFocus ? " lpanel-focus-card--root" : ""}${focusDragOver && draggingId ? " lpanel-focus-card--drag-over" : ""}`}
+            className={`lpanel-focus-card${isRootFocus ? " lpanel-focus-card--root" : ""}${!isRootFocus && isFocusTerminal && focusNode.answer ? " lpanel-focus-card--terminal" : ""}${focusDragOver && draggingId ? " lpanel-focus-card--drag-over" : ""}`}
             onDragOver={e => {
               if (draggingId && draggingId !== focusNode.id) {
                 e.preventDefault();
@@ -146,18 +152,14 @@ export default function LeftPanel({
           >
             <span className="lpanel-focus-badge">Focus</span>
             <span className="lpanel-focus-title">{focusNode.aspect}</span>
-            {focusChildless && phase === "selecting" && onExploreFocus && (
-              <button className="lpanel-explore-btn" onClick={onExploreFocus} disabled={exploringNodeId === focusNode.id}>
-                {exploringNodeId === focusNode.id ? <span className="lpanel-spinner" /> : "Explore →"}
-              </button>
+            {isFocusTerminal && (focusNode.answer || focusNode.question) && (
+              <span className="lpanel-focus-description">
+                {focusNode.answer || focusNode.question}
+              </span>
             )}
           </div>
 
-          {isFocusTerminal ? (
-            <div className="lpanel-children-list lpanel-children-list--single">
-              <NavCard node={focusNode} {...sharedProps} isSelf />
-            </div>
-          ) : realChildren.length > 0 ? (
+          {isFocusTerminal ? null : realChildren.length > 0 ? (
             <div className="lpanel-children-list">
               {realChildren.map(child => (
                 <NavCard key={child.id} node={child} {...sharedProps} />
@@ -186,9 +188,14 @@ export default function LeftPanel({
               )}
             </>
           )}
+          {isFocusTerminal && phase === "selecting" && onExploreFocus && inlineAddParentId !== focusNodeId && (
+            <button className="lpanel-explore-standalone-btn" onClick={onExploreFocus} disabled={exploringNodeId === focusNode.id}>
+              {exploringNodeId === focusNode.id ? <span className="lpanel-spinner" /> : "Explore →"}
+            </button>
+          )}
           {inlineAddParentId !== focusNodeId && (
             <button
-              className="lpanel-add-inline-btn"
+              className={`lpanel-add-inline-btn${isFocusTerminal ? " lpanel-add-inline-btn--terminal" : ""}`}
               onClick={() => { setInlineAddParentId(focusNodeId); setInlineAddText(""); }}
             >+ Add Aspect</button>
           )}
@@ -224,9 +231,18 @@ function InlineAddInput({ value, onChange, onKeyDown, onBlur, onSubmit }) {
   );
 }
 
-function SignoffCard({ node, onDelete }) {
+function SignoffCard({ node, onDelete, isHovered, onHoverNode }) {
+  const rowClass = [
+    "lpanel-child-row lpanel-child-row--signoff",
+    isHovered ? "lpanel-child-row--hovered" : "",
+  ].filter(Boolean).join(" ");
+
   return (
-    <div className="lpanel-child-row lpanel-child-row--signoff">
+    <div
+      className={rowClass}
+      onMouseEnter={() => onHoverNode?.(node.id)}
+      onMouseLeave={() => onHoverNode?.(null)}
+    >
       <div className="lpanel-child-row-header">
         <span className="lpanel-child-label">{node.aspect}</span>
         <button
@@ -343,7 +359,7 @@ function NavCard({
           <span className="lpanel-child-label">{node.aspect}</span>
         </div>
         {depth === 0 && (isAnswered ? (
-          <span className="lpanel-child-question">{node.description || node.answer}</span>
+          <span className="lpanel-child-question">{node.answer}</span>
         ) : node.question ? (
           <span className="lpanel-child-question">{node.question}</span>
         ) : null)}
