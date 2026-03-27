@@ -3,6 +3,15 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Ignore Latex stuff except for .tex, .bib and .pdf files
+assets/project_report/*
+# !assets/project_report/*.tex
+# !assets/project_report/*.bib
+# !assets/project_report/*.pdf
+
+# DS Store
+.DS_Store
+
 # C extensions
 *.so
 

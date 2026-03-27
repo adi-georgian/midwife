@@ -42,27 +42,16 @@ export default function DiscourseNode({ data }) {
   const srcPos = POS[sourcePosition] ?? Position.Bottom;
   const tgtPos = POS[targetPosition] ?? Position.Top;
 
-  const renderHandles = () => {
-    if (isRoot || isFocus) {
-      return (
-        <>
-          <Handle id="top" type="target" position={Position.Top} style={HANDLE_HIDDEN} />
-          <Handle id="left" type="source" position={Position.Left} style={HANDLE_HIDDEN} />
-          <Handle id="right" type="source" position={Position.Right} style={HANDLE_HIDDEN} />
-          <Handle id="bottom" type="source" position={Position.Bottom} style={HANDLE_HIDDEN} />
-        </>
-      );
-    }
-    if (isParentPreview) {
-      return <Handle id="bottom" type="source" position={Position.Bottom} style={HANDLE_HIDDEN} />;
-    }
-    return (
-      <>
-        <Handle type="target" position={tgtPos} style={HANDLE_HIDDEN} />
-        <Handle type="source" position={srcPos} style={HANDLE_HIDDEN} />
-      </>
-    );
-  };
+  const renderHandles = () => (
+    <>
+      <Handle id="top" type="target" position={Position.Top} style={HANDLE_HIDDEN} />
+      <Handle id="left-t" type="target" position={Position.Left} style={HANDLE_HIDDEN} />
+      <Handle id="right-t" type="target" position={Position.Right} style={HANDLE_HIDDEN} />
+      <Handle id="left" type="source" position={Position.Left} style={HANDLE_HIDDEN} />
+      <Handle id="right" type="source" position={Position.Right} style={HANDLE_HIDDEN} />
+      <Handle id="bottom" type="source" position={Position.Bottom} style={HANDLE_HIDDEN} />
+    </>
+  );
 
   return (
     <div

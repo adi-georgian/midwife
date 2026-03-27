@@ -113,9 +113,13 @@ function buildGraphElements(tree, interviewingId, focusNodeId, viewMode) {
   });
 
   if (parentNode) {
+    // Use a prefixed ID so the same tree node never transitions between
+    // "parent preview" (1 handle) and "focus" (4 handles) within the same
+    // React Flow node instance — that transition confuses RF's handle registry.
+    const previewId = `preview-${parentNode.id}`;
     const parentIsTerminal = (parentNode.children || []).filter(c => !c.is_ghost && !c.is_loading).length === 0;
     nodes.push({
-      id: parentNode.id,
+      id: previewId,
       type: "discourseNode",
       position: { x: 0, y: -PARENT_Y },
       data: {
@@ -127,14 +131,14 @@ function buildGraphElements(tree, interviewingId, focusNodeId, viewMode) {
       },
     });
     edges.push({
-      id: `e-parent-${parentNode.id}-${focusNode.id}`,
-      source: parentNode.id,
+      id: `e-parent-${previewId}-${focusNode.id}`,
+      source: previewId,
       target: focusNode.id,
-      type: "default",
+      type: "straight",
       sourceHandle: "bottom",
       targetHandle: "top",
-      style: { stroke: "#ccc", opacity: 0.5, strokeDasharray: "6 4", strokeWidth: 1.5 },
-      data: { baseStyle: { stroke: "#ccc", opacity: 0.5, strokeDasharray: "6 4", strokeWidth: 1.5 } },
+      style: { stroke: "#888", opacity: 0.8, strokeDasharray: "5 5", strokeWidth: 2 },
+      data: { baseStyle: { stroke: "#888", opacity: 0.8, strokeDasharray: "5 5", strokeWidth: 2 } },
     });
   }
 
@@ -148,6 +152,7 @@ function buildGraphElements(tree, interviewingId, focusNodeId, viewMode) {
 
   function placeChildSide(sideChildren, xSign) {
     const srcHandle = xSign < 0 ? "left" : "right";
+    const tgtHandle = xSign < 0 ? "right-t" : "left-t";
     const srcPos = xSign < 0 ? "left" : "right";
     const tgtPos = xSign < 0 ? "right" : "left";
 
@@ -190,6 +195,7 @@ function buildGraphElements(tree, interviewingId, focusNodeId, viewMode) {
         target: child.id,
         type: "default",
         sourceHandle: srcHandle,
+        targetHandle: tgtHandle,
         style: childBaseStyle,
         data: { baseStyle: childBaseStyle },
       });
@@ -221,6 +227,8 @@ function buildGraphElements(tree, interviewingId, focusNodeId, viewMode) {
           source: child.id,
           target: gc.id,
           type: "default",
+          sourceHandle: srcHandle,
+          targetHandle: tgtHandle,
           style: gcBaseStyle,
           data: { baseStyle: gcBaseStyle },
         });
@@ -251,6 +259,8 @@ function buildGraphElements(tree, interviewingId, focusNodeId, viewMode) {
               source: gc.id,
               target: ggc.id,
               type: "default",
+              sourceHandle: srcHandle,
+              targetHandle: tgtHandle,
               style: ggcBaseStyleFull,
               data: { baseStyle: ggcBaseStyleFull },
             });
@@ -582,6 +592,11 @@ function AutoLayout({ focusNodeId, layoutEngine }) {
   const { getNodes, getEdges, setNodes, fitView } = useReactFlow();
   const nodesInitialized = useNodesInitialized();
   const layoutKeyRef = useRef(null);
+
+  // Always re-layout when focus changes, even if node measurements are identical
+  useEffect(() => {
+    layoutKeyRef.current = null;
+  }, [focusNodeId]);
 
   useEffect(() => {
     if (!nodesInitialized) return;
@@ -957,7 +972,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
       return;
     }
 
-    if (nodeData.isParentPreview) { navigateTo(rfNode.id); return; }
+    if (nodeData.isParentPreview) { navigateTo(nodeData.id); return; }
     if (nodeData.is_ghost || nodeData.isGhostDisplay || nodeData.is_loading) return;
     if (nodeData.isFocus || nodeData.isRoot) return;
 
