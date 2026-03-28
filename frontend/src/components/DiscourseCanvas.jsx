@@ -1403,7 +1403,6 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
   return (
     <div className="app-layout">
       <div className="canvas-header">
-        <div className="canvas-header-left" />
         <span className="canvas-brand" onClick={onHome} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onHome?.()}>midWife</span>
         <div className="canvas-header-actions">
           <button className="canvas-header-btn" onClick={handleExport}>↓ Export</button>
