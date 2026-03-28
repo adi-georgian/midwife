@@ -29,7 +29,7 @@ const NODE_TYPES = { discourseNode: DiscourseNode };
 
 const H_STEP = 180;
 const PARENT_Y = 120;
-const MAX_NODE_WIDTH = 240;  // hard cap for column-width uniformity
+const MAX_NODE_WIDTH = 280;  // hard cap for column-width uniformity
 
 // Layout spacing constants (used for initial rough positions in buildGraphElements)
 const MIN_CHILD_H = 90;    // minimum height allocated per child
@@ -682,7 +682,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
 
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
-  const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [rightPanelWidth, setRightPanelWidth] = useState(280);
 
   function handleRightPanelWidthChange(w) {
@@ -903,6 +903,39 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
     } catch {}
   }
 
+  async function handleReviewSubmit() {
+    setReviewing(false);
+    // Recontextualize once at end of interview for the last answered node
+    const lastNode = interviewQueue[interviewQueue.length - 1];
+    if (lastNode && sessionId) {
+      setIsRecontextualizing(true);
+      try {
+        const data = await recontextualizeAspect(sessionId, lastNode.id);
+        setIsRecontextualizing(false);
+        if (data.updated_ancestors?.length > 0) {
+          const latestTree = await new Promise(res => setTree(prev => { res(prev); return prev; }));
+          const changes = data.updated_ancestors.map(u => {
+            const oldNode = findNode(latestTree, u.id);
+            return { id: u.id, oldLabel: oldNode?.aspect || u.id, newLabel: u.new_aspect };
+          });
+          setPendingRelabelings(changes);
+          if (changes.length > 0) {
+            setShowRepurposing(true);
+            if (data.spinoff_suggestions?.length > 0) setPendingSpinoffs(data.spinoff_suggestions);
+            return;
+          }
+        }
+        if (data.spinoff_suggestions?.length > 0) setPendingSpinoffs(data.spinoff_suggestions);
+      } catch {
+        setIsRecontextualizing(false);
+      }
+    }
+    flushPendingSpinoffs();
+    setPhase("selecting");
+    setLeftPanelOpen(true);
+    handleGeneratePanel();
+  }
+
   function flushPendingSpinoffs() {
     if (pendingSpinoffs && pendingSpinoffs.length > 0) {
       setSpinoffSuggestions(pendingSpinoffs);
@@ -958,32 +991,6 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
     setChatThreads(prev => prev.map(t =>
       t.aspectId === node.id ? { ...t, chatAnswerCleared: false } : t
     ));
-
-    // Fire recontextualize async (non-blocking) — collect relabelings for approval, queue spinoffs
-    setIsRecontextualizing(true);
-    recontextualizeAspect(sessionId, node.id).then(data => {
-      setIsRecontextualizing(false);
-      if (data.updated_ancestors?.length > 0) {
-        setTree(prev => {
-          const changes = data.updated_ancestors.map(u => {
-            const oldNode = findNode(prev, u.id);
-            return { id: u.id, oldLabel: oldNode?.aspect || u.id, newLabel: u.new_aspect };
-          });
-          setPendingRelabelings(prev => {
-            const merged = [...prev];
-            for (const c of changes) {
-              const idx = merged.findIndex(p => p.id === c.id);
-              if (idx >= 0) merged[idx] = c; else merged.push(c);
-            }
-            return merged;
-          });
-          return prev; // don't apply yet — wait for user approval
-        });
-      }
-      if (data.spinoff_suggestions?.length > 0) {
-        setPendingSpinoffs(data.spinoff_suggestions);
-      }
-    }).catch(() => { setIsRecontextualizing(false); });
 
     const nextIndex = interviewIndex + 1;
     if (nextIndex < interviewQueue.length) {
@@ -1479,6 +1486,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
           exploringNodeId={exploringNodeId}
           onHoverNode={setHoveredNodeId}
           onInlineAdd={handleInlineAddAspect}
+          discourseFinished={discourseFinished}
         />
       ) : (
         <button className="lpanel-expand-btn" onClick={() => setLeftPanelOpen(true)} title="Expand panel">›</button>
@@ -1598,17 +1606,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
           <ReviewCard
             queue={interviewQueue}
             onEdit={i => { setReviewing(false); setInterviewIndex(i); }}
-            onSubmit={() => {
-              setReviewing(false);
-              if (pendingRelabelings.length > 0) {
-                setShowRepurposing(true);
-              } else {
-                flushPendingSpinoffs();
-                setPhase("selecting");
-                setLeftPanelOpen(true);
-                handleGeneratePanel();
-              }
-            }}
+            onSubmit={handleReviewSubmit}
           />
         )}
 

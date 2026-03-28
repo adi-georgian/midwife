@@ -84,7 +84,30 @@ export default function RightPanel({
       <div className="rpanel-header">
         <span className="rpanel-title">Plan</span>
         {planContent && !isPanelGenerating && (
-          <button className="rpanel-zoom-btn" onClick={() => setPlanModalOpen(true)} title="Expand plan">⤢</button>
+          <div className="rpanel-header-actions">
+            <button className="rpanel-zoom-btn" onClick={() => setPlanModalOpen(true)} title="Expand plan">
+              <svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9"/>
+              </svg>
+            </button>
+            <button
+              className="rpanel-save-btn"
+              title="Save as .md"
+              onClick={() => {
+                const blob = new Blob([planContent], { type: "text/markdown" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "midwife-plan.md";
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              <svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M7 1v8M4 6l3 3 3-3M2 11h10"/>
+              </svg>
+            </button>
+          </div>
         )}
       </div>
 

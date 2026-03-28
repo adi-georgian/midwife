@@ -16,6 +16,7 @@ export default function LeftPanel({
   focusChildless, onExploreFocus, exploringNodeId,
   onSelectNode, onExplore, onDelete, onEditAspect, onAddChild, onMove, onConfirmMove,
   onAddAspect, onConfirmSignoff, onNavigateTo, onCollapse, onHoverNode, onInlineAdd,
+  discourseFinished = false,
 }) {
   const [inlineAddParentId, setInlineAddParentId] = useState(null);
   const [inlineAddText, setInlineAddText] = useState("");
@@ -84,7 +85,7 @@ export default function LeftPanel({
                 />
               )}
             </div>
-            {inlineAddParentId !== signoffParent.id && (
+            {inlineAddParentId !== signoffParent.id && !discourseFinished && (
               <button
                 className="lpanel-add-inline-btn"
                 onClick={() => { setInlineAddParentId(signoffParent.id); setInlineAddText(""); }}
@@ -193,7 +194,7 @@ export default function LeftPanel({
               {exploringNodeId === focusNode.id ? <span className="lpanel-spinner" /> : "Explore →"}
             </button>
           )}
-          {inlineAddParentId !== focusNodeId && (
+          {inlineAddParentId !== focusNodeId && !discourseFinished && (
             <button
               className={`lpanel-add-inline-btn${isFocusTerminal ? " lpanel-add-inline-btn--terminal" : ""}`}
               onClick={() => { setInlineAddParentId(focusNodeId); setInlineAddText(""); }}

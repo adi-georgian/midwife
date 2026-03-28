@@ -32,6 +32,12 @@ export default function ChatBar({
   // Offset so the bar stays centered on the visible canvas area
   const canvasOffset = (leftPanelOpen ? 150 : 0) - (rightPanelOpen ? rightPanelWidth / 2 : 0);
 
+  // Cap width so the bar never spills into the panels
+  const leftW = leftPanelOpen ? 300 : 0;
+  const rightW = rightPanelOpen ? rightPanelWidth : 0;
+  const availableW = window.innerWidth - leftW - rightW - 48;
+  const chatBarWidth = Math.min(640, Math.max(320, availableW));
+
   // Sync expanded with parent chatOpen in both directions
   useEffect(() => {
     setExpanded(!!initialExpanded);
@@ -105,7 +111,7 @@ export default function ChatBar({
   const handleClose = () => { setExpanded(false); onCollapse?.(); };
 
   return (
-    <div className="chat-bar" ref={barRef} style={{ left: `calc(50% + ${canvasOffset}px)` }}>
+    <div className="chat-bar" ref={barRef} style={{ left: `calc(50% + ${canvasOffset}px)`, width: chatBarWidth }}>
       {expanded && (
         <div className="chat-bar__panel">
           <ChatPanel

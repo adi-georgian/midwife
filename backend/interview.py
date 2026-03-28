@@ -21,6 +21,16 @@ def _trunc(text: str, max_chars: int = 120) -> str:
     if not text or len(text) <= max_chars:
         return text
     return text[:max_chars].rstrip() + "…"
+
+
+def _extract_json(raw: str) -> dict:
+    """Extract and parse the first JSON object from a string, tolerating prose/markdown around it."""
+    text = raw.strip()
+    brace = text.find("{")
+    rbrace = text.rfind("}")
+    if brace == -1 or rbrace == -1 or rbrace < brace:
+        raise json.JSONDecodeError("No JSON object found", text, 0)
+    return json.loads(text[brace:rbrace + 1])
 # Models tried in order; first healthy one wins.
 GEMINI_MODELS = [
     "gemini-2.0-flash",
@@ -47,12 +57,14 @@ def _call_claude_with_retry(fn, max_attempts=3):
                 raise
 
 
-def _generate_text(system: str, prompt_or_messages, temperature: float = 0.7, max_tokens: int = 2048, response_schema=None) -> str:
+def _generate_text(system: str, prompt_or_messages, temperature: float = 0.7, max_tokens: int = 2048, response_schema=None, skip_claude: bool = False) -> str:
     """Try Claude Haiku first, then fall back to Gemini models.
 
     response_schema: optional dict describing the expected JSON shape. When provided,
     Gemini is instructed to emit application/json constrained to that schema, which
     prevents malformed-JSON responses at the sampling level.
+    skip_claude: when True, skip Claude entirely and go straight to Gemini. Use for
+    large structured outputs where Gemini's response_schema enforcement is an advantage.
     """
     if isinstance(prompt_or_messages, str):
         gemini_contents = prompt_or_messages
@@ -67,7 +79,7 @@ def _generate_text(system: str, prompt_or_messages, temperature: float = 0.7, ma
         ]
         claude_messages = list(prompt_or_messages)
 
-    if anthropic_client:
+    if anthropic_client and not skip_claude:
         def claude_fn():
             kwargs = dict(
                 model=CLAUDE_MODEL,
@@ -138,7 +150,7 @@ Rules:
 {{"aspects": [{{"aspect": "...", "question": "...", "suggestions": ["...", "...", "..."]}}]}}
 
 Each aspect object must have:
-- "aspect": MAXIMUM 3 words. Use concise noun phrases — NO personal pronouns (no My, Your, Our, etc.). Good examples: "Budget", "Location", "Customers", "Team", "Timeline", "Food & Drink". Use plain, everyday language — NO jargon, NO academic or technical terms, NO cerebral abstractions.
+- "aspect": MAXIMUM 3 words. Use concise noun phrases — NO personal pronouns (no My, Your, Our, etc.). Good examples: "Budget", "Location", "Customers", "Team", "Timeline", "Food & Drink". Use plain, everyday language — NO jargon, NO academic or technical terms, NO cerebral abstractions. IMPORTANT: If the user used an abbreviation in their objective (e.g. "UofT", "NYC", "AI", "ML"), use that exact abbreviation in the aspect title rather than spelling it out.
 - "question": ONE simple sentence a complete beginner can understand. NO assumed knowledge of the topic. Write as if the person has never heard of this subject before. Be warm and direct.
 - "suggestions": 3-5 short answer options. Short phrases, NOT sentences. First-person where natural for answers (e.g. "Under $500", "With a few close friends", "Not sure yet").
 """
@@ -339,19 +351,9 @@ def generate_panel_tabs(objective: str, mode: str, background: dict, tree: dict)
         f"Respond with JSON only: {json_example}"
     )
 
-    raw = _generate_text(system, prompt, temperature=0.4, max_tokens=8192)
-    text = raw.strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-    if text.endswith("```"):
-        text = text.rsplit("```", 1)[0]
-    text = text.strip()
-    brace = text.find("{")
-    if brace > 0:
-        text = text[brace:]
-
+    raw = _generate_text(system, prompt, temperature=0.4, max_tokens=8192, skip_claude=True)
     try:
-        data = json.loads(text)
+        data = _extract_json(raw)
     except Exception:
         data = {}
 
@@ -422,19 +424,8 @@ def generate_chat_reply(
         )
 
     raw = _generate_text(system, messages, temperature=0.7)
-    # Strip markdown code fences if present
-    text = raw.strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-    if text.endswith("```"):
-        text = text.rsplit("```", 1)[0]
-    text = text.strip()
-    # Find JSON object — skip any leading prose before the first '{'
-    brace = text.find("{")
-    if brace > 0:
-        text = text[brace:]
     try:
-        data = json.loads(text)
+        data = _extract_json(raw)
         updated_tab = None
         if tab_context and data.get("updated_tab_content"):
             updated_tab = {
@@ -490,12 +481,7 @@ def recontextualize_ancestors(objective: str, ancestors: list[dict], mode: str =
 
     try:
         raw = _generate_text(system, prompt, temperature=0.3)
-        if raw.startswith("```"):
-            raw = raw.split("\n", 1)[1]
-        if raw.endswith("```"):
-            raw = raw.rsplit("```", 1)[0]
-        data = json.loads(raw.strip())
-        return data
+        return _extract_json(raw)
     except Exception:
         return {"updated_ancestors": [], "spinoff_suggestions": []}
 
@@ -586,16 +572,11 @@ def generate_questions(
     prompt = f"Objective: {objective}\n\n{context_text}"
 
     for attempt in range(2):
-        text = _generate_text(system_instruction, prompt, temperature=0.7, response_schema=_ASPECTS_SCHEMA)
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1]
-        if text.endswith("```"):
-            text = text.rsplit("```", 1)[0]
-        text = text.strip()
+        raw = _generate_text(system_instruction, prompt, temperature=0.7, response_schema=_ASPECTS_SCHEMA)
         try:
-            data = json.loads(text)
+            data = _extract_json(raw)
             return data["aspects"]
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, KeyError):
             if attempt == 0:
                 logger.warning("generate_questions: malformed JSON on attempt 1, retrying")
                 continue
@@ -661,13 +642,16 @@ def generate_briefing(objective: str, mode: str, background: dict, aspects: list
         "A user has just submitted their planning objective. Before the structured interview begins, "
         "prepare a briefing that helps them understand what you've set up.\n\n"
         "Return a JSON object with exactly these fields:\n"
-        "- overview_prose: 2-4 flowing paragraphs (NOT bullet points) that echo back the user's objective "
-        "in your own words, acknowledge the context they've shared, and set the stage for the discourse. "
-        "Be warm, specific, and grounded in what they actually said. Do not invent facts.\n"
+        "- overview_prose: a lively, well-structured overview using light markdown formatting. "
+        "Use **bold** to highlight key terms, names, and important phrases. "
+        "Structure it with a short opening paragraph, then 1-2 sections using ## headings (e.g. ## What You're Building, ## Key Considerations). "
+        "Each section can have 2-4 sentences or a short bullet list using '- '. "
+        "Echo back the user's objective in your own words, acknowledge context they've shared, and set the stage. "
+        "Be warm, specific, grounded in what they actually said. Do not invent facts.\n"
         "- aspect_rationales: for each aspect listed below, produce an object with:\n"
         "  - aspect_name: the exact aspect name (string)\n"
         "  - rationale: 1-2 crisp, thought-provoking sentences on why this aspect matters. Be specific — no filler.\n\n"
-        "overview_prose must be flowing paragraphs — never bullet points or lists."
+        "overview_prose must use markdown formatting as described above."
     )
     if mode:
         instr = _mode_instructions(mode)
@@ -682,17 +666,8 @@ def generate_briefing(objective: str, mode: str, background: dict, aspects: list
 
     for attempt in range(2):
         raw = _generate_text(system, prompt, temperature=0.6, max_tokens=2500, response_schema=_BRIEFING_SCHEMA)
-        text = raw.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-        if text.endswith("```"):
-            text = text.rsplit("```", 1)[0]
-        text = text.strip()
-        brace = text.find("{")
-        if brace > 0:
-            text = text[brace:]
         try:
-            result = json.loads(text)
+            result = _extract_json(raw)
             if result.get("overview_prose"):
                 return result
             if attempt == 0:
@@ -726,18 +701,8 @@ def generate_briefing_chat_update(
     prompt = f"{context}\n\nUser directive: {message}"
 
     raw = _generate_text(system, prompt, temperature=0.4, max_tokens=2000)
-    text = raw.strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-    if text.endswith("```"):
-        text = text.rsplit("```", 1)[0]
-    text = text.strip()
-    brace = text.find("{")
-    if brace > 0:
-        text = text[brace:]
-
     try:
-        return json.loads(text)
+        return _extract_json(raw)
     except Exception:
         return {"acknowledgment": "Got it.", "updated_overview": None}
 
@@ -782,17 +747,8 @@ def generate_briefing_cycle(objective: str, mode: str, background: dict, tree: d
 
     for attempt in range(2):
         raw = _generate_text(system, prompt, temperature=0.65, max_tokens=2500, response_schema=_BRIEFING_CYCLE_SCHEMA)
-        text = raw.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-        if text.endswith("```"):
-            text = text.rsplit("```", 1)[0]
-        text = text.strip()
-        brace = text.find("{")
-        if brace > 0:
-            text = text[brace:]
         try:
-            return json.loads(text)
+            return _extract_json(raw)
         except Exception:
             if attempt == 0:
                 logger.warning("generate_briefing_cycle: malformed JSON on attempt 1, retrying")

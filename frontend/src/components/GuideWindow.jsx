@@ -322,7 +322,6 @@ export default function GuideWindow({
             <span className="guide-header__label">Briefing</span>
             <h2 className="guide-header__title">{PAGE_TITLES[currentPage]}</h2>
           </div>
-          <span className="guide-brand">midWife</span>
           <div className="guide-progress-dots-wrap">
             <ProgressDots pages={pageList} currentIndex={pageIndex} />
           </div>
@@ -356,6 +355,11 @@ export default function GuideWindow({
 
           {currentPage === "aspects" && (
             <div className="guide-aspects-page">
+              {!isLoading && localAspects.length > 0 && (
+                <p className="guide-aspects-intro">
+                  Here are some aspects Midwife thinks are worth exploring — which of these resonate with you? We'll interview you about these shortly. Feel free to remove, edit, or add your own.
+                </p>
+              )}
               {isLoading && localAspects.length === 0 ? (
                 <Skeleton />
               ) : !isLoading && localAspects.length === 0 ? (
@@ -406,8 +410,8 @@ export default function GuideWindow({
             <div className="chat-bar__input-row">
               <textarea
                 ref={chatInputRef}
-                className="chat-bar__input"
-                placeholder="Refine this overview…"
+                className="chat-bar__input guide-chat-input"
+                placeholder="Anything to add?"
                 value={chatDraft}
                 onChange={e => setChatDraft(e.target.value)}
                 onKeyDown={handleChatKeyDown}
@@ -419,7 +423,13 @@ export default function GuideWindow({
                 onClick={handleSendChat}
                 disabled={!chatDraft.trim() || isChatWaiting || isLoading}
               >
-                {isChatWaiting ? "…" : "↑"}
+                {isChatWaiting ? (
+                  "…"
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                  </svg>
+                )}
               </button>
             </div>
           </div>
