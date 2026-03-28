@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { generateQuestionForAspect } from "../api";
-import PlanMarkdown from "./PlanMarkdown";
+import PlanMarkdown, { renderInline } from "./PlanMarkdown";
 
 // ── Skeleton ─────────────────────────────────────────────────────────────────
 
@@ -96,7 +96,7 @@ function BriefingAspectItem({ node, onRemove, onUpdate }) {
       </div>
 
       {node.rationale && (
-        <p className="guide-aspect-item__rationale">{node.rationale}</p>
+        <p className="guide-aspect-item__rationale">{renderInline(node.rationale)}</p>
       )}
 
       <div className="guide-aspect-item__card">
@@ -248,7 +248,7 @@ export default function GuideWindow({
 
   const PAGE_TITLES = {
     overview: cycle === 0 ? "Overview" : "Plan So Far",
-    aspects: cycle === 0 ? "What We'll Explore" : "New Directions",
+    aspects: cycle === 0 ? "Aspects We Can Explore" : "New Directions",
   };
 
   // Overview state

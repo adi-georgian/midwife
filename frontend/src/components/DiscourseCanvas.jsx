@@ -682,7 +682,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
 
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
-  const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [rightPanelWidth, setRightPanelWidth] = useState(280);
 
   function handleRightPanelWidthChange(w) {
@@ -739,8 +739,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
   // Panel summary state — restore from session if available, else build from objective
   const [panelTabs, setPanelTabs] = useState(() => {
     if (initialPanelTabs && initialPanelTabs.length > 0) return initialPanelTabs;
-    const content = buildOverviewContent(objective, background);
-    return [{ id: "overview", title: "Overview", content }];
+    return [{ id: "overview", title: "Overview", content: "" }];
   });
   const [activePanelTabId, setActivePanelTabId] = useState("overview");
   const [isPanelGenerating, setIsPanelGenerating] = useState(false);
@@ -905,35 +904,32 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
 
   async function handleReviewSubmit() {
     setReviewing(false);
-    // Recontextualize once at end of interview for the last answered node
+    setPhase("selecting");
+    setLeftPanelOpen(true);
+    // Fire plan generation and recontextualize in parallel — they don't depend on each other
+    handleGeneratePanel();
     const lastNode = interviewQueue[interviewQueue.length - 1];
     if (lastNode && sessionId) {
       setIsRecontextualizing(true);
-      try {
-        const data = await recontextualizeAspect(sessionId, lastNode.id);
+      recontextualizeAspect(sessionId, lastNode.id).then(data => {
         setIsRecontextualizing(false);
         if (data.updated_ancestors?.length > 0) {
-          const latestTree = await new Promise(res => setTree(prev => { res(prev); return prev; }));
-          const changes = data.updated_ancestors.map(u => {
-            const oldNode = findNode(latestTree, u.id);
-            return { id: u.id, oldLabel: oldNode?.aspect || u.id, newLabel: u.new_aspect };
+          setTree(prev => {
+            const changes = data.updated_ancestors.map(u => {
+              const oldNode = findNode(prev, u.id);
+              return { id: u.id, oldLabel: oldNode?.aspect || u.id, newLabel: u.new_aspect };
+            });
+            setPendingRelabelings(changes);
+            if (changes.length > 0) setShowRepurposing(true);
+            return prev;
           });
-          setPendingRelabelings(changes);
-          if (changes.length > 0) {
-            setShowRepurposing(true);
-            if (data.spinoff_suggestions?.length > 0) setPendingSpinoffs(data.spinoff_suggestions);
-            return;
-          }
         }
         if (data.spinoff_suggestions?.length > 0) setPendingSpinoffs(data.spinoff_suggestions);
-      } catch {
-        setIsRecontextualizing(false);
-      }
+        flushPendingSpinoffs();
+      }).catch(() => setIsRecontextualizing(false));
+    } else {
+      flushPendingSpinoffs();
     }
-    flushPendingSpinoffs();
-    setPhase("selecting");
-    setLeftPanelOpen(true);
-    handleGeneratePanel();
   }
 
   function flushPendingSpinoffs() {

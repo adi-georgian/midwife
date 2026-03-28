@@ -117,6 +117,7 @@ export default function LeftPanel({
     onInlineBlur: handleInlineSubmit,
     showGrandchildren,
     exploringNodeId,
+    discourseFinished,
   };
 
   const isFocusTerminal = realChildren.length === 0;
@@ -189,7 +190,7 @@ export default function LeftPanel({
               )}
             </>
           )}
-          {isFocusTerminal && phase === "selecting" && onExploreFocus && inlineAddParentId !== focusNodeId && (
+          {isFocusTerminal && phase === "selecting" && onExploreFocus && inlineAddParentId !== focusNodeId && !discourseFinished && (
             <button className="lpanel-explore-standalone-btn" onClick={onExploreFocus} disabled={exploringNodeId === focusNode.id}>
               {exploringNodeId === focusNode.id ? <span className="lpanel-spinner" /> : "Explore →"}
             </button>
@@ -269,6 +270,7 @@ function NavCard({
   inlineAddParentId, setInlineAddParentId, inlineAddText, setInlineAddText,
   onInlineKeyDown, onInlineBlur,
   showGrandchildren, exploringNodeId,
+  discourseFinished = false,
 }) {
   const [hovered, setHovered] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -281,7 +283,7 @@ function NavCard({
   const isSelected = selectedNodeId === node.id;
   const isHoveredByCanvas = hoveredNodeId === node.id;
   const isMoveTarget = movingNodeId && movingNodeId !== node.id;
-  const showActions = (isSelected || hovered || exploringNodeId === node.id) && !isSelf && depth === 0 && !isEditing;
+  const showActions = (isSelected || hovered || exploringNodeId === node.id) && !isSelf && depth === 0 && !isEditing && !discourseFinished;
 
   useEffect(() => {
     if (isEditing) editTitleRef.current?.focus();
@@ -351,7 +353,7 @@ function NavCard({
     <>
       <div
         className={rowClass}
-        draggable={!isSelf && !isEditing}
+        draggable={!isSelf && !isEditing && !discourseFinished}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         onMouseEnter={() => { setHovered(true); onHoverNode?.(node.id); }}

@@ -199,6 +199,53 @@ body.theme-dark .react-flow__controls-button:hover svg {
   fill: var(--text-1);
 }
 
+/* Dark mode: Aston Martin Green for answered nodes */
+body.theme-dark .discourse-node--answered {
+  background: #00665E;
+  border-color: #00887d;
+  color: #fff;
+}
+
+body.theme-dark .lpanel-child-row--answered {
+  background: #00665E;
+  border-color: #00887d;
+}
+
+body.theme-dark .lpanel-child-row--answered::before,
+body.theme-dark .lpanel-child-row--answered::after {
+  border-color: #00887d;
+}
+
+body.theme-dark .lpanel-child-row--answered + .lpanel-gc-list::before {
+  border-color: #00887d;
+}
+
+/* Dark mode: boost node and panel text contrast */
+body.theme-dark .discourse-node__label {
+  color: var(--text-1);
+}
+
+body.theme-dark .discourse-node__answer {
+  color: var(--text-2);
+}
+
+body.theme-dark .lpanel-child-label {
+  color: var(--text-1);
+}
+
+body.theme-dark .lpanel-child-question {
+  color: var(--text-2);
+}
+
+body.theme-dark .lpanel-focus-title {
+  color: var(--text-1);
+}
+
+body.theme-dark .lpanel-focus-description {
+  color: var(--text-2);
+  opacity: 1;
+}
+
 .landing-input-prefix {
   font-size: 1rem;
   color: var(--text-1);
@@ -4366,7 +4413,7 @@ body.theme-dark .react-flow__controls-button:hover svg {
   color: var(--blue-badge);
   margin: 0 0 14px;
   padding-bottom: 10px;
-  border-bottom: 2px solid var(--blue-badge);
+  border-bottom: 2px solid var(--border);
   line-height: 1.25;
 }
 
@@ -4411,6 +4458,12 @@ body.theme-dark .react-flow__controls-button:hover svg {
 
 .rpanel-plan-list li strong {
   color: var(--text-1);
+}
+
+/* Nested sub-lists */
+.rpanel-plan-list .rpanel-plan-list {
+  margin: 6px 0 4px;
+  list-style: circle;
 }
 
 .rpanel-signoff-prompt {

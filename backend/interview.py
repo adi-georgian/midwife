@@ -298,7 +298,7 @@ def _tree_to_text(node: dict, depth: int = 0) -> str:
     return "\n".join(lines)
 
 
-def generate_panel_tabs(objective: str, mode: str, background: dict, tree: dict) -> list[dict]:
+def generate_panel_tabs(objective: str, mode: str, background: dict, tree: dict, title: str = "") -> list[dict]:
     """Generate all panel tab contents for the given session."""
     primary_mode = mode.split(",")[0].strip() if mode else ""
     tabs_def = PANEL_TABS_BY_MODE.get(primary_mode, DEFAULT_TABS)
@@ -351,7 +351,7 @@ def generate_panel_tabs(objective: str, mode: str, background: dict, tree: dict)
         f"Respond with JSON only: {json_example}"
     )
 
-    raw = _generate_text(system, prompt, temperature=0.4, max_tokens=8192, skip_claude=True)
+    raw = _generate_text(system, prompt, temperature=0.4, max_tokens=8192)
     try:
         data = _extract_json(raw)
     except Exception:
@@ -359,10 +359,20 @@ def generate_panel_tabs(objective: str, mode: str, background: dict, tree: dict)
 
     result = []
     for tab in tabs_def:
+        content = data.get(tab["id"], "")
+        if tab["id"] == "overview" and content:
+            # Strip any LLM-generated # title line(s) at the top
+            lines = content.lstrip("\n").splitlines()
+            while lines and lines[0].lstrip().startswith("# "):
+                lines.pop(0)
+            content = "\n".join(lines).lstrip("\n")
+            # Prepend the canonical discourse title
+            if title:
+                content = f"# {title}\n\n{content}"
         result.append({
             "id": tab["id"],
             "title": tab["title"],
-            "content": data.get(tab["id"], ""),
+            "content": content,
         })
     return result
 

@@ -418,6 +418,7 @@ async def generate_panel(session_id: str):
             mode=session.mode,
             background=session.background,
             tree=session.root.model_dump(),
+            title=session.discourse_name or session.objective,
         )
         return GeneratePanelResponse(tabs=[PanelTab(**t) for t in tabs])
     except (ServerError, ClientError, _anthropic.APIStatusError, RuntimeError) as e:
