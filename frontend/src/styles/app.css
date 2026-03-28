@@ -50,21 +50,21 @@ body.theme-dark {
   --border:           #383C54;   /* dark navy border */
   --border-light:     #272A3C;   /* very subtle */
   --border-hover:     #8480E8;   /* muted indigo on hover */
-  --text-1:           #FFFFFF;   /* pure white */
-  --text-2:           #B8BCCE;   /* bright blue-gray */
-  --text-3:           #7A7F98;   /* medium */
+  --text-1:           #D8DCF0;   /* softened off-white */
+  --text-2:           #8A8FA8;   /* muted blue-gray */
+  --text-3:           #5A5F7A;   /* dimmer */
   --accent-bg:        #8480E8;   /* muted indigo */
   --accent-text:      #FFFFFF;
   --accent-hover:     #7370D6;
   --chip-border:      #2A2D3E;
   --chip-sel-bg:      #0F2018;
   --chip-sel-text:    #4ADE80;
-  --chip-sel-border:  #4ADE80;
+  --chip-sel-border:  #22C55E;
   --chip-chat-bg:     #1A1D3A;
   --chip-chat-text:   #818CF8;
   --chip-chat-border: #3730A3;
-  --node-ans-bg:      #4ADE80;
-  --node-ans-text:    #22C55E;
+  --node-ans-bg:      #0A1A10;
+  --node-ans-text:    #4ADE80;
   --node-ans-shadow:  rgba(74, 222, 128, 0.18);
   --node-int-text:    #818CF8;
   --node-int-shadow:  rgba(99, 102, 241, 0.55), 0 2px 10px rgba(99, 102, 241, 0.20);
@@ -80,28 +80,6 @@ body.theme-dark {
   --choose-btn-hover: #16A34A;
   --blue-badge:       #8480E8;
   --blue-badge-text:  #FFFFFF;
-}
-
-/* ReactFlow controls — dark mode */
-body.theme-dark .react-flow__controls {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  box-shadow: none;
-}
-
-body.theme-dark .react-flow__controls-button {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  color: var(--text-1);
-  fill: var(--text-1);
-}
-
-body.theme-dark .react-flow__controls-button:hover {
-  background: var(--surface-alt);
-}
-
-body.theme-dark .react-flow__controls-button svg {
-  fill: var(--text-1);
 }
 
 * {
@@ -191,6 +169,34 @@ body {
 
 body.theme-dark .landing-input-wrapper:focus-within {
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+}
+
+/* ReactFlow controls — dark mode override */
+body.theme-dark .react-flow__controls {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+body.theme-dark .react-flow__controls-button {
+  background: var(--surface);
+  border-bottom-color: var(--border);
+  color: var(--text-2);
+  fill: var(--text-2);
+}
+
+body.theme-dark .react-flow__controls-button:hover {
+  background: var(--surface-alt);
+  color: var(--text-1);
+  fill: var(--text-1);
+}
+
+body.theme-dark .react-flow__controls-button svg {
+  fill: var(--text-2);
+}
+
+body.theme-dark .react-flow__controls-button:hover svg {
+  fill: var(--text-1);
 }
 
 .landing-input-prefix {
