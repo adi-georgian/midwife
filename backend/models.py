@@ -14,6 +14,12 @@ class AspectNode(BaseModel):
     children: list["AspectNode"] = []
 
 
+class UpdateAspectRequest(BaseModel):
+    aspect: str | None = None
+    answer: str | None = None
+    question: str | None = None
+
+
 class SessionState(BaseModel):
     session_id: str
     objective: str

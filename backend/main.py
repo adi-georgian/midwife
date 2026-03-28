@@ -20,6 +20,7 @@ from backend.models import (
     GeneratePanelResponse,
     LabelChatRequest,
     MoveAspectRequest,
+    UpdateAspectRequest,
     PanelTab,
     PrefetchRequest,
     PrefetchResponse,
@@ -403,6 +404,24 @@ async def delete_aspect(session_id: str, aspect_id: str):
     parent.children = [c for c in parent.children if c.id != aspect_id]
     store.save_session(session)
     return {"status": "ok"}
+
+
+@app.patch("/session/{session_id}/aspect/{aspect_id}")
+async def update_aspect(session_id: str, aspect_id: str, request: UpdateAspectRequest):
+    session = store.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    node = session.find_node(aspect_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Aspect not found")
+    if request.aspect is not None:
+        node.aspect = request.aspect.strip()
+    if request.answer is not None:
+        node.answer = request.answer.strip() or None
+    if request.question is not None:
+        node.question = request.question.strip()
+    store.save_session(session)
+    return {"ok": True}
 
 
 @app.post("/session/{session_id}/move-aspect/{aspect_id}")

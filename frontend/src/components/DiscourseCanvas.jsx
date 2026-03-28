@@ -21,7 +21,7 @@ import CreateNodeModal from "./CreateNodeModal";
 import LeftPanel from "./LeftPanel";
 import RepurposingModal from "./RepurposingModal";
 import PendingTopicsModal from "./PendingTopicsModal";
-import { answerAspect, elaborateAspect, addAspect, sendChatMessage, labelChat, deleteAspect, moveAspect, recontextualizeAspect, generatePanelTabs } from "../api";
+import { answerAspect, elaborateAspect, addAspect, sendChatMessage, labelChat, deleteAspect, moveAspect, recontextualizeAspect, generatePanelTabs, updateAspect } from "../api";
 import { toTitleCase } from "../utils";
 import dagre from "@dagrejs/dagre";
 
@@ -1128,6 +1128,13 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
     setInterviewQueue(prev => prev.filter(n => n.id !== nodeId));
   }
 
+  async function handleEditAspect(nodeId, fields) {
+    try {
+      await updateAspect(sessionId, nodeId, fields);
+    } catch (err) { setApiError(err.message); return; }
+    setTree(prev => patchNode(prev, nodeId, fields));
+  }
+
   async function handleConfirmMove(targetParentId, sourceId) {
     const nodeToMove = sourceId || movingNodeId;
     if (!nodeToMove || targetParentId === nodeToMove) { setMovingNodeId(null); return; }
@@ -1418,6 +1425,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
           onSelectNode={setSelectedNodeId}
           onExplore={handleExploreNode}
           onDelete={handleDeleteNode}
+          onEditAspect={handleEditAspect}
           onAddChild={id => { setCreateChildParentId(id); setAddAspectMode("add-child"); }}
           onMove={id => { setMovingNodeId(id); setSelectedNodeId(null); }}
           onConfirmMove={handleConfirmMove}

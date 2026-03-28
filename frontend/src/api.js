@@ -85,6 +85,14 @@ export async function generatePanelTabs(sessionId) {
   return apiFetch(`/session/${sessionId}/generate-panel`, { method: "POST" });
 }
 
+export async function updateAspect(sessionId, aspectId, fields) {
+  return apiFetch(`/session/${sessionId}/aspect/${aspectId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(fields),
+  });
+}
+
 export async function deleteAspect(sessionId, aspectId) {
   return apiFetch(`/session/${sessionId}/aspect/${aspectId}`, {
     method: "DELETE",

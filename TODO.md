@@ -1,8 +1,0 @@
-- [ x ] Basic LLM code
-    - ask you questions
-    - take your answers for each
-    - feed back to LLM
-    - update understanding thus far
-    - generate more questions
-    - produce final plan
-- [ ] Mockup UI

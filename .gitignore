@@ -4,10 +4,10 @@ __pycache__/
 *$py.class
 
 # Ignore Latex stuff except for .tex, .bib and .pdf files
-assets/project_report/*
-# !assets/project_report/*.tex
-# !assets/project_report/*.bib
-# !assets/project_report/*.pdf
+docs/project_report/*
+# !docs/project_report/*.tex
+# !docs/project_report/*.bib
+# !docs/project_report/*.pdf
 
 # DS Store
 .DS_Store

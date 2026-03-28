@@ -50,21 +50,21 @@ body.theme-dark {
   --border:           #383C54;   /* dark navy border */
   --border-light:     #272A3C;   /* very subtle */
   --border-hover:     #8480E8;   /* muted indigo on hover */
-  --text-1:           #D8DCF0;   /* softened off-white */
-  --text-2:           #8A8FA8;   /* muted blue-gray */
-  --text-3:           #5A5F7A;   /* dimmer */
+  --text-1:           #FFFFFF;   /* pure white */
+  --text-2:           #B8BCCE;   /* bright blue-gray */
+  --text-3:           #7A7F98;   /* medium */
   --accent-bg:        #8480E8;   /* muted indigo */
   --accent-text:      #FFFFFF;
   --accent-hover:     #7370D6;
   --chip-border:      #2A2D3E;
   --chip-sel-bg:      #0F2018;
   --chip-sel-text:    #4ADE80;
-  --chip-sel-border:  #22C55E;
+  --chip-sel-border:  #4ADE80;
   --chip-chat-bg:     #1A1D3A;
   --chip-chat-text:   #818CF8;
   --chip-chat-border: #3730A3;
-  --node-ans-bg:      #0A1A10;
-  --node-ans-text:    #4ADE80;
+  --node-ans-bg:      #4ADE80;
+  --node-ans-text:    #22C55E;
   --node-ans-shadow:  rgba(74, 222, 128, 0.18);
   --node-int-text:    #818CF8;
   --node-int-shadow:  rgba(99, 102, 241, 0.55), 0 2px 10px rgba(99, 102, 241, 0.20);
@@ -80,6 +80,28 @@ body.theme-dark {
   --choose-btn-hover: #16A34A;
   --blue-badge:       #8480E8;
   --blue-badge-text:  #FFFFFF;
+}
+
+/* ReactFlow controls — dark mode */
+body.theme-dark .react-flow__controls {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+body.theme-dark .react-flow__controls-button {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-1);
+  fill: var(--text-1);
+}
+
+body.theme-dark .react-flow__controls-button:hover {
+  background: var(--surface-alt);
+}
+
+body.theme-dark .react-flow__controls-button svg {
+  fill: var(--text-1);
 }
 
 * {
@@ -2977,7 +2999,7 @@ body.theme-dark .landing-input-wrapper:focus-within {
   color: #dc2626;
 }
 
-.lpanel-card-move-btn {
+.lpanel-card-edit-btn {
   position: absolute;
   bottom: 5px;
   right: 5px;
@@ -2996,13 +3018,89 @@ body.theme-dark .landing-input-wrapper:focus-within {
   z-index: 2;
 }
 
-.lpanel-card-move-btn:hover {
-  border-color: var(--border-hover);
-  color: var(--text-1);
+.lpanel-card-edit-btn:hover {
+  border-color: var(--blue-badge);
+  color: var(--blue-badge);
   background: var(--surface-alt);
 }
 
-.lpanel-card-move-btn { cursor: grab; }
+.lpanel-child-row--editing {
+  border-color: var(--blue-badge);
+}
+
+.lpanel-edit-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+}
+
+.lpanel-edit-title-input {
+  font-size: 0.88rem;
+  font-weight: 700;
+  font-family: inherit;
+  border: none;
+  border-bottom: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--text-1);
+  padding: 2px 0;
+  width: 100%;
+  outline: none;
+}
+
+.lpanel-edit-title-input:focus {
+  border-bottom-color: var(--blue-badge);
+}
+
+.lpanel-edit-desc-textarea {
+  font-size: 0.78rem;
+  font-family: inherit;
+  border: none;
+  border-bottom: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  padding: 2px 0;
+  width: 100%;
+  outline: none;
+  resize: none;
+  line-height: 1.4;
+}
+
+.lpanel-edit-desc-textarea:focus {
+  border-bottom-color: var(--blue-badge);
+}
+
+.lpanel-edit-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.lpanel-edit-actions button {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border: 1.5px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.lpanel-edit-actions button:first-child {
+  border-color: var(--blue-badge);
+  color: var(--blue-badge);
+}
+
+.lpanel-edit-actions button:first-child:hover {
+  background: var(--blue-badge);
+  color: #fff;
+}
+
+.lpanel-edit-actions button:last-child:hover {
+  border-color: var(--border-hover);
+  color: var(--text-1);
+}
 
 /* Drag-and-drop states */
 .lpanel-child-row[draggable] { cursor: default; }

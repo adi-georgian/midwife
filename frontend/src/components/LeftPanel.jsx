@@ -14,7 +14,7 @@ export default function LeftPanel({
   phase, movingNodeId, signoffParentId,
   viewMode,
   focusChildless, onExploreFocus, exploringNodeId,
-  onSelectNode, onExplore, onDelete, onAddChild, onMove, onConfirmMove,
+  onSelectNode, onExplore, onDelete, onEditAspect, onAddChild, onMove, onConfirmMove,
   onAddAspect, onConfirmSignoff, onNavigateTo, onCollapse, onHoverNode, onInlineAdd,
 }) {
   const [inlineAddParentId, setInlineAddParentId] = useState(null);
@@ -109,7 +109,7 @@ export default function LeftPanel({
   const sharedProps = {
     selectedNodeId, hoveredNodeId, movingNodeId,
     draggingId, setDraggingId,
-    onSelectNode, onExplore, onDelete, onMove, onConfirmMove, onNavigateTo, onHoverNode,
+    onSelectNode, onExplore, onDelete, onEditAspect, onMove, onConfirmMove, onNavigateTo, onHoverNode,
     inlineAddParentId, setInlineAddParentId,
     inlineAddText, setInlineAddText,
     onInlineKeyDown: handleInlineKeyDown,
@@ -264,18 +264,40 @@ function NavCard({
   node, isSelf, depth = 0,
   selectedNodeId, hoveredNodeId, movingNodeId,
   draggingId, setDraggingId,
-  onSelectNode, onExplore, onDelete, onMove, onConfirmMove, onNavigateTo, onHoverNode,
+  onSelectNode, onExplore, onDelete, onEditAspect, onMove, onConfirmMove, onNavigateTo, onHoverNode,
   inlineAddParentId, setInlineAddParentId, inlineAddText, setInlineAddText,
   onInlineKeyDown, onInlineBlur,
   showGrandchildren, exploringNodeId,
 }) {
   const [hovered, setHovered] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const editTitleRef = useRef(null);
+
   const isAnswered = !!node.answer;
   const isSelected = selectedNodeId === node.id;
   const isHoveredByCanvas = hoveredNodeId === node.id;
   const isMoveTarget = movingNodeId && movingNodeId !== node.id;
-  const showActions = (isSelected || hovered || exploringNodeId === node.id) && !isSelf && depth === 0;
+  const showActions = (isSelected || hovered || exploringNodeId === node.id) && !isSelf && depth === 0 && !isEditing;
+
+  useEffect(() => {
+    if (isEditing) editTitleRef.current?.focus();
+  }, [isEditing]);
+
+  async function handleEditSave() {
+    const payload = {};
+    const trimmedTitle = editTitle.trim();
+    if (trimmedTitle && trimmedTitle !== node.aspect) payload.aspect = trimmedTitle;
+    const descField = node.answer !== undefined && node.answer !== null ? "answer" : "question";
+    const originalDesc = node.answer ?? node.question ?? "";
+    if (editDesc !== originalDesc) payload[descField] = editDesc;
+    if (Object.keys(payload).length > 0) {
+      await onEditAspect?.(node.id, payload);
+    }
+    setIsEditing(false);
+  }
 
   const grandchildren = (showGrandchildren && depth === 0)
     ? (node.children || []).filter(c => !c.is_ghost && !c.is_loading)
@@ -283,6 +305,7 @@ function NavCard({
 
   function handleClick(e) {
     e.stopPropagation();
+    if (isEditing) return;
     if (movingNodeId && movingNodeId !== node.id) {
       onConfirmMove(node.id);
       return;
@@ -294,6 +317,7 @@ function NavCard({
 
   function handleDoubleClick(e) {
     e.stopPropagation();
+    if (isEditing) return;
     if (!isSelf) {
       onSelectNode?.(null);
       onNavigateTo?.(node.id);
@@ -305,6 +329,7 @@ function NavCard({
     depth > 0 ? "lpanel-child-row--gc" : "",
     isAnswered ? "lpanel-child-row--answered" : "",
     showActions ? "lpanel-child-row--active" : "",
+    isEditing ? "lpanel-child-row--editing" : "",
     isHoveredByCanvas && !showActions ? "lpanel-child-row--hovered" : "",
     isMoveTarget ? "lpanel-child-row--move-target" : "",
     isSelf ? "lpanel-child-row--self" : "",
@@ -315,7 +340,7 @@ function NavCard({
   const gcSharedProps = {
     selectedNodeId, hoveredNodeId, movingNodeId,
     draggingId, setDraggingId,
-    onSelectNode, onExplore, onDelete, onMove, onConfirmMove, onNavigateTo, onHoverNode,
+    onSelectNode, onExplore, onDelete, onEditAspect, onMove, onConfirmMove, onNavigateTo, onHoverNode,
     inlineAddParentId, setInlineAddParentId, inlineAddText, setInlineAddText,
     onInlineKeyDown, onInlineBlur,
     showGrandchildren: false,
@@ -325,13 +350,13 @@ function NavCard({
     <>
       <div
         className={rowClass}
-        draggable={!isSelf}
+        draggable={!isSelf && !isEditing}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         onMouseEnter={() => { setHovered(true); onHoverNode?.(node.id); }}
         onMouseLeave={() => { setHovered(false); onHoverNode?.(null); }}
         onDragStart={e => {
-          if (isSelf) { e.preventDefault(); return; }
+          if (isSelf || isEditing) { e.preventDefault(); return; }
           e.dataTransfer.effectAllowed = "move";
           e.dataTransfer.setData("nodeId", node.id);
           setDraggingId(node.id);
@@ -355,14 +380,46 @@ function NavCard({
           setIsDragOver(false);
         }}
       >
-        <div className="lpanel-child-row-header">
-          <span className="lpanel-child-label">{node.aspect}</span>
-        </div>
-        {depth === 0 && (isAnswered ? (
-          <span className="lpanel-child-question">{node.answer}</span>
-        ) : node.question ? (
-          <span className="lpanel-child-question">{node.question}</span>
-        ) : null)}
+        {isEditing ? (
+          <div className="lpanel-edit-fields" onClick={e => e.stopPropagation()}>
+            <input
+              ref={editTitleRef}
+              className="lpanel-edit-title-input"
+              value={editTitle}
+              onChange={e => setEditTitle(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter") { e.preventDefault(); handleEditSave(); }
+                if (e.key === "Escape") setIsEditing(false);
+              }}
+              placeholder="Aspect title"
+            />
+            <textarea
+              className="lpanel-edit-desc-textarea"
+              value={editDesc}
+              onChange={e => setEditDesc(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Escape") setIsEditing(false);
+              }}
+              rows={2}
+              placeholder="Description (optional)"
+            />
+            <div className="lpanel-edit-actions">
+              <button onClick={e => { e.stopPropagation(); handleEditSave(); }}>Save</button>
+              <button onClick={e => { e.stopPropagation(); setIsEditing(false); }}>Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="lpanel-child-row-header">
+              <span className="lpanel-child-label">{node.aspect}</span>
+            </div>
+            {depth === 0 && (isAnswered ? (
+              <span className="lpanel-child-question">{node.answer}</span>
+            ) : node.question ? (
+              <span className="lpanel-child-question">{node.question}</span>
+            ) : null)}
+          </>
+        )}
         {showActions && !movingNodeId && (
           <>
             <button
@@ -380,14 +437,17 @@ function NavCard({
               <button onClick={e => { e.stopPropagation(); setInlineAddParentId(node.id); setInlineAddText(""); }}>+ Sub-Aspect</button>
             </div>
             <button
-              className="lpanel-card-move-btn"
-              title="Drag to move"
-              onClick={e => e.stopPropagation()}
+              className="lpanel-card-edit-btn"
+              title="Edit"
+              onClick={e => {
+                e.stopPropagation();
+                setEditTitle(node.aspect);
+                setEditDesc(node.answer ?? node.question ?? "");
+                setIsEditing(true);
+              }}
             >
-              <svg viewBox="0 0 8 12" width="8" height="12" fill="currentColor">
-                <circle cx="2" cy="2" r="1.2"/><circle cx="6" cy="2" r="1.2"/>
-                <circle cx="2" cy="6" r="1.2"/><circle cx="6" cy="6" r="1.2"/>
-                <circle cx="2" cy="10" r="1.2"/><circle cx="6" cy="10" r="1.2"/>
+              <svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8.5 1.5l2 2L4 10l-2.5.5.5-2.5 6.5-6.5z"/>
               </svg>
             </button>
           </>
