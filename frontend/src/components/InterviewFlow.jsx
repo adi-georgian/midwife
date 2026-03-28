@@ -34,13 +34,8 @@ export default function InterviewFlow({
     }
   }, [node?.id]);
 
-  function summarizeDraft(text) {
-    const words = text.trim().split(/\s+/);
-    return words.length > 4 ? words.slice(0, 4).join(" ") + "…" : text.trim();
-  }
-
   function buildAnswer() {
-    const parts = [...selectedChips, summarizeDraft(draft.trim())];
+    const parts = [...selectedChips, draft.trim()];
     if (chatSuggestedAnswer && !selectedChips.includes(chatSuggestedAnswer)) {
       parts.push(chatSuggestedAnswer);
     }

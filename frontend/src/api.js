@@ -120,3 +120,33 @@ export async function generateAspectsForLabel(sessionId, parentId, label, detail
     body: JSON.stringify({ label, details: details || "" }),
   });
 }
+
+export async function generateBriefing(sessionId) {
+  return apiFetch(`/session/${sessionId}/briefing`, { method: "POST" });
+}
+
+export async function sendBriefingChat(sessionId, { message, page, currentOverview, currentIdeas, currentQuestions }) {
+  return apiFetch(`/session/${sessionId}/briefing-chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message,
+      page,
+      current_overview: currentOverview ?? null,
+      current_ideas: currentIdeas ?? null,
+      current_questions: currentQuestions ?? null,
+    }),
+  });
+}
+
+export async function generateQuestionForAspect(sessionId, label, details = "") {
+  return apiFetch(`/session/${sessionId}/generate-question`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ label, details }),
+  });
+}
+
+export async function generateBriefingCycle(sessionId) {
+  return apiFetch(`/session/${sessionId}/briefing-cycle`, { method: "POST" });
+}

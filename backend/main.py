@@ -6,11 +6,17 @@ from fastapi import FastAPI, HTTPException
 from google.genai.errors import ClientError, ServerError
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.interview import generate_aspect_description, generate_chat_label, generate_chat_reply, generate_discourse_name, generate_panel_tabs, generate_questions, recontextualize_ancestors
+from backend.interview import generate_aspect_description, generate_briefing, generate_briefing_chat_update, generate_briefing_cycle, generate_chat_label, generate_chat_reply, generate_discourse_name, generate_panel_tabs, generate_questions, recontextualize_ancestors
 from backend.models import (
     AddAspectRequest,
+    AspectContext,
     AspectNode,
     AnswerRequest,
+    BriefingAspect,
+    BriefingChatRequest,
+    BriefingChatResponse,
+    BriefingCycleResponse,
+    BriefingResponse,
     ChatRequest,
     ChatResponse,
     CreateSessionRequest,
@@ -281,6 +287,31 @@ async def generate_aspects_for_label(session_id: str, parent_id: str, request: G
     return {"aspects": [a.model_dump() for a in aspects]}
 
 
+@app.post("/session/{session_id}/generate-question")
+async def generate_question_for_aspect(session_id: str, request: GenerateAspectsRequest):
+    """Generate a single Socratic question for a named aspect given an optional description."""
+    session = store.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        context_path = []
+        if request.details:
+            context_path = [{"aspect": request.label, "question": f"What is your thinking on {request.label}?", "answer": request.details}]
+        raw = generate_questions(
+            objective=session.objective,
+            context_path=context_path if context_path else None,
+            covered_aspects=collect_aspects(session.root),
+            mode=session.mode,
+            background=session.background,
+            target_aspect=request.label,
+            max_questions=1,
+        )
+        question = raw[0]["question"] if raw else f"What are your thoughts on {request.label}?"
+        return {"question": question}
+    except (ClientError, ServerError, _anthropic.APIStatusError, RuntimeError):
+        raise HTTPException(status_code=503, detail="AI service is currently overloaded. Please try again in a moment.")
+
+
 @app.get("/session/{session_id}/tree", response_model=TreeResponse)
 async def get_tree(session_id: str):
     session = store.get_session(session_id)
@@ -512,3 +543,55 @@ async def reveal_children(session_id: str, aspect_id: str):
 
     store.save_session(session)
     return RevealResponse(children=node.children)
+
+
+@app.post("/session/{session_id}/briefing", response_model=BriefingResponse)
+async def get_briefing(session_id: str):
+    session = store.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        aspects_list = [{"aspect": c.aspect, "question": c.question} for c in session.root.children]
+        data = generate_briefing(session.objective, session.mode, session.background, aspects_list)
+        aspect_rationales = [AspectContext(**r) for r in data.get("aspect_rationales", []) if isinstance(r, dict)]
+        return BriefingResponse(
+            overview_prose=data.get("overview_prose", ""),
+            aspect_rationales=aspect_rationales,
+        )
+    except (ClientError, ServerError, _anthropic.APIStatusError, RuntimeError):
+        raise HTTPException(status_code=503, detail="AI service is currently overloaded. Please try again in a moment.")
+
+
+@app.post("/session/{session_id}/briefing-chat", response_model=BriefingChatResponse)
+async def briefing_chat(session_id: str, request: BriefingChatRequest):
+    session = store.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        data = generate_briefing_chat_update(
+            message=request.message,
+            page=request.page,
+            current_overview=request.current_overview,
+            current_ideas=request.current_ideas,
+            current_questions=request.current_questions,
+        )
+        return BriefingChatResponse(
+            acknowledgment=data.get("acknowledgment", "Got it."),
+            updated_overview=data.get("updated_overview"),
+        )
+    except (ClientError, ServerError, _anthropic.APIStatusError, RuntimeError):
+        raise HTTPException(status_code=503, detail="AI service is currently overloaded. Please try again in a moment.")
+
+
+@app.post("/session/{session_id}/briefing-cycle", response_model=BriefingCycleResponse)
+async def briefing_cycle(session_id: str):
+    session = store.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        tree_dict = session.root.model_dump()
+        data = generate_briefing_cycle(session.objective, session.mode, session.background, tree_dict)
+        aspects = [BriefingAspect(**a) for a in data.get("aspects", []) if isinstance(a, dict)]
+        return BriefingCycleResponse(aspects=aspects)
+    except (ClientError, ServerError, _anthropic.APIStatusError, RuntimeError):
+        raise HTTPException(status_code=503, detail="AI service is currently overloaded. Please try again in a moment.")

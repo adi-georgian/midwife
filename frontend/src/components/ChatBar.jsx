@@ -21,10 +21,16 @@ export default function ChatBar({
   onContextChange,
   isChatWaiting,
   onGeneratePanel,
+  leftPanelOpen = true,
+  rightPanelOpen = false,
+  rightPanelWidth = 280,
 }) {
   const [expanded, setExpanded] = useState(initialExpanded || false);
   const [inputDraft, setInputDraft] = useState("");
   const barRef = useRef(null);
+
+  // Offset so the bar stays centered on the visible canvas area
+  const canvasOffset = (leftPanelOpen ? 150 : 0) - (rightPanelOpen ? rightPanelWidth / 2 : 0);
 
   // Sync expanded with parent chatOpen in both directions
   useEffect(() => {
@@ -99,7 +105,7 @@ export default function ChatBar({
   const handleClose = () => { setExpanded(false); onCollapse?.(); };
 
   return (
-    <div className="chat-bar" ref={barRef}>
+    <div className="chat-bar" ref={barRef} style={{ left: `calc(50% + ${canvasOffset}px)` }}>
       {expanded && (
         <div className="chat-bar__panel">
           <ChatPanel
@@ -119,11 +125,13 @@ export default function ChatBar({
             onContextChange={onContextChange}
             isChatWaiting={isChatWaiting}
             onGeneratePanel={onGeneratePanel}
+            interviewPaused={interviewPaused}
+            onResumeInterview={onResumeInterview}
           />
         </div>
       )}
 
-      {interviewPaused && (
+      {interviewPaused && !expanded && (
         <button className="chat-bar__resume-btn" onClick={onResumeInterview}>
           ▶ Resume Interview
         </button>
@@ -131,13 +139,6 @@ export default function ChatBar({
 
       {!expanded && (
         <div className="chat-bar__input-row">
-          <button
-            className="chat-bar__threads-btn"
-            onClick={handleToggleThreadsIcon}
-            title="Conversations"
-          >
-            ≡ Chats
-          </button>
           <input
             className="chat-bar__input"
             type="text"

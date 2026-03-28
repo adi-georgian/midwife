@@ -301,17 +301,28 @@ def generate_panel_tabs(objective: str, mode: str, background: dict, tree: dict)
     bg_text = "\n".join(bg_lines) if bg_lines else "None provided."
 
     tab_ids_str = ", ".join(f'"{t["id"]}"' for t in tabs_def)
-    tab_descriptions = "\n".join(
-        f'- "{t["id"]}" ({t["title"]}): concise content for this section based on what has been discussed'
-        for t in tabs_def
-    )
+
+    def _tab_desc(t):
+        if t["id"] == "overview":
+            return (
+                '- "overview": A full, well-structured plan document in markdown. '
+                'Use ## headers with relevant emojis for each section '
+                '(e.g. "## 🎯 Goal", "## 💡 Key Decisions", "## ✅ Action Steps", '
+                '"## ⚠️ Watch Out For", "## ❓ Open Questions"). '
+                'Use - bullet points under each section. Use **bold** for key terms. '
+                'Be specific and grounded in what was actually discussed. '
+                'This should read like a real, actionable deliverable — not a brief summary.'
+            )
+        return f'- "{t["id"]}" ({t["title"]}): focused markdown content for this section using bullet points and **bold** for key terms'
+
+    tab_descriptions = "\n".join(_tab_desc(t) for t in tabs_def)
 
     system = (
-        "You are a planning assistant summarising a Socratic planning session. "
-        "Based on the objective, background, and discourse tree provided, generate content for each of the following panel tabs. "
+        "You are a planning assistant generating a plan document for a Socratic planning session. "
+        "Based on the objective, background, and discourse tree, generate rich markdown content for each tab. "
         "Be concrete, specific, and grounded in what the user actually said. "
-        "Use plain language. Use bullet points where appropriate. Keep each section focused and actionable. "
-        "Respond with valid JSON only: a single object where each key is a tab id and the value is the content string.\n"
+        "Use ## headers, - bullet points, and **bold** for key terms throughout. "
+        "Respond with valid JSON only: a single object where each key is a tab id and the value is a markdown string.\n"
         f"Tabs to fill:\n{tab_descriptions}"
     )
     if mode:
@@ -328,7 +339,7 @@ def generate_panel_tabs(objective: str, mode: str, background: dict, tree: dict)
         f"Respond with JSON only: {json_example}"
     )
 
-    raw = _generate_text(system, prompt, temperature=0.4, max_tokens=2048)
+    raw = _generate_text(system, prompt, temperature=0.4, max_tokens=8192)
     text = raw.strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[1] if "\n" in text else text[3:]
@@ -589,3 +600,201 @@ def generate_questions(
                 logger.warning("generate_questions: malformed JSON on attempt 1, retrying")
                 continue
             raise RuntimeError("The AI returned a malformed response. Please try again.")
+
+
+# ── Briefing generation ───────────────────────────────────────────────────────
+
+_BRIEFING_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "overview_prose": {"type": "STRING"},
+        "aspect_rationales": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "aspect_name": {"type": "STRING"},
+                    "rationale":   {"type": "STRING"},
+                },
+                "required": ["aspect_name", "rationale"],
+            },
+        },
+    },
+    "required": ["overview_prose", "aspect_rationales"],
+}
+
+_BRIEFING_CYCLE_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "aspects": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "id":       {"type": "STRING"},
+                    "aspect":   {"type": "STRING"},
+                    "question": {"type": "STRING"},
+                    "rationale": {"type": "STRING"},
+                },
+                "required": ["id", "aspect", "question", "rationale"],
+            },
+        },
+    },
+    "required": ["aspects"],
+}
+
+
+def generate_briefing(objective: str, mode: str, background: dict, aspects: list[dict]) -> dict:
+    """Generate the initial Briefing Window content: overview prose + per-aspect rationales."""
+    bg_lines = []
+    for k, v in (background or {}).items():
+        if v and str(v).strip():
+            bg_lines.append(f"- {k.replace('_', ' ').title()}: {v}")
+    bg_text = "\n".join(bg_lines) if bg_lines else "None provided."
+
+    aspects_text = "\n".join(
+        f"- {a['aspect']}: {a['question']}" for a in (aspects or [])
+    ) or "None yet."
+
+    system = (
+        "You are Midwife, a Socratic planning assistant. "
+        "A user has just submitted their planning objective. Before the structured interview begins, "
+        "prepare a briefing that helps them understand what you've set up.\n\n"
+        "Return a JSON object with exactly these fields:\n"
+        "- overview_prose: 2-4 flowing paragraphs (NOT bullet points) that echo back the user's objective "
+        "in your own words, acknowledge the context they've shared, and set the stage for the discourse. "
+        "Be warm, specific, and grounded in what they actually said. Do not invent facts.\n"
+        "- aspect_rationales: for each aspect listed below, produce an object with:\n"
+        "  - aspect_name: the exact aspect name (string)\n"
+        "  - rationale: 1-2 crisp, thought-provoking sentences on why this aspect matters. Be specific — no filler.\n\n"
+        "overview_prose must be flowing paragraphs — never bullet points or lists."
+    )
+    if mode:
+        instr = _mode_instructions(mode)
+        if instr:
+            system += "\n\n" + instr
+
+    prompt = (
+        f"Objective: {objective}\n\n"
+        f"Background context provided by the user:\n{bg_text}\n\n"
+        f"Aspects to generate rationales for:\n{aspects_text}"
+    )
+
+    for attempt in range(2):
+        raw = _generate_text(system, prompt, temperature=0.6, max_tokens=2500, response_schema=_BRIEFING_SCHEMA)
+        text = raw.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+        if text.endswith("```"):
+            text = text.rsplit("```", 1)[0]
+        text = text.strip()
+        brace = text.find("{")
+        if brace > 0:
+            text = text[brace:]
+        try:
+            result = json.loads(text)
+            if result.get("overview_prose"):
+                return result
+            if attempt == 0:
+                logger.warning("generate_briefing: empty overview_prose on attempt 1, retrying")
+                continue
+            raise RuntimeError("generate_briefing: LLM returned empty overview after 2 attempts")
+        except json.JSONDecodeError:
+            if attempt == 0:
+                logger.warning("generate_briefing: malformed JSON on attempt 1, retrying")
+                continue
+            raise RuntimeError("generate_briefing: malformed JSON after 2 attempts")
+
+
+def generate_briefing_chat_update(
+    message: str,
+    page: str,
+    current_overview: str | None,
+    current_ideas: list[dict] | None,
+    current_questions: list[dict] | None,
+) -> dict:
+    """Apply a user directive to update the briefing overview (not a conversational reply)."""
+    system = (
+        "You are editing a planning document on behalf of the user. "
+        "Apply the user's directive directly to the overview section — do NOT have a conversation. "
+        "Return a JSON object with:\n"
+        "- acknowledgment: one brief sentence confirming what you changed\n"
+        "- updated_overview: the full updated overview prose\n"
+        "Respond with valid JSON only."
+    )
+    context = f"Current overview:\n{current_overview or '(empty)'}"
+    prompt = f"{context}\n\nUser directive: {message}"
+
+    raw = _generate_text(system, prompt, temperature=0.4, max_tokens=2000)
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+    if text.endswith("```"):
+        text = text.rsplit("```", 1)[0]
+    text = text.strip()
+    brace = text.find("{")
+    if brace > 0:
+        text = text[brace:]
+
+    try:
+        return json.loads(text)
+    except Exception:
+        return {"acknowledgment": "Got it.", "updated_overview": None}
+
+
+def generate_briefing_cycle(objective: str, mode: str, background: dict, tree: dict) -> dict:
+    """Generate 5 new aspects with rationales after an interview cycle completes.
+
+    Uses the answered tree so the LLM avoids repeating already-covered territory.
+    """
+    import uuid as _uuid
+    tree_text = _tree_to_text(tree)
+
+    bg_lines = []
+    for k, v in (background or {}).items():
+        if v and str(v).strip():
+            bg_lines.append(f"- {k.replace('_', ' ').title()}: {v}")
+    bg_text = "\n".join(bg_lines) if bg_lines else "None provided."
+
+    system = (
+        "You are Midwife, a Socratic planning assistant. "
+        "The user has just completed an interview round. Suggest 5 new aspects that would deepen or broaden "
+        "the discourse — things NOT already covered in the tree.\n\n"
+        "Return a JSON object with EXACTLY this key:\n"
+        "- aspects: array of exactly 5 new aspects, each with:\n"
+        "  - id: a short unique slug (e.g. 'cycle-1', 'cycle-2')\n"
+        "  - aspect: a concise aspect title (2-4 words)\n"
+        "  - question: a Socratic question that opens up this aspect (1 sentence)\n"
+        "  - rationale: 1-2 crisp, thought-provoking sentences on why this aspect matters — no filler\n"
+        "Do NOT repeat aspects or themes already addressed in the discourse tree.\n"
+        'You MUST respond with valid JSON only. Example: {"aspects": [{"id": "cycle-1", "aspect": "...", "question": "...", "rationale": "..."}]}'
+    )
+    if mode:
+        instr = _mode_instructions(mode)
+        if instr:
+            system += "\n\n" + instr
+
+    prompt = (
+        f"Objective: {objective}\n\n"
+        f"Background:\n{bg_text}\n\n"
+        f"Discourse tree (already covered):\n{tree_text}"
+    )
+
+    for attempt in range(2):
+        raw = _generate_text(system, prompt, temperature=0.65, max_tokens=2500, response_schema=_BRIEFING_CYCLE_SCHEMA)
+        text = raw.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+        if text.endswith("```"):
+            text = text.rsplit("```", 1)[0]
+        text = text.strip()
+        brace = text.find("{")
+        if brace > 0:
+            text = text[brace:]
+        try:
+            return json.loads(text)
+        except Exception:
+            if attempt == 0:
+                logger.warning("generate_briefing_cycle: malformed JSON on attempt 1, retrying")
+                continue
+            return {"aspects": []}

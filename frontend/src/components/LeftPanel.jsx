@@ -98,7 +98,7 @@ export default function LeftPanel({
             onClick={onConfirmSignoff}
             disabled={signoffChildren.length === 0}
           >
-            ✓ Confirm Aspects
+            Start Interview
           </button>
         </div>
       </div>
@@ -231,7 +231,7 @@ function InlineAddInput({ value, onChange, onKeyDown, onBlur, onSubmit }) {
   );
 }
 
-function SignoffCard({ node, onDelete, isHovered, onHoverNode }) {
+export function SignoffCard({ node, onDelete, isHovered, onHoverNode }) {
   const rowClass = [
     "lpanel-child-row lpanel-child-row--signoff",
     isHovered ? "lpanel-child-row--hovered" : "",

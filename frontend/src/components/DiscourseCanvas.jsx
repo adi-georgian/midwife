@@ -660,15 +660,17 @@ function AutoLayout({ focusNodeId, layoutEngine, graphVersion }) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function DiscourseCanvas({ sessionId, tree, setTree, objective, discourseTitle, background = {}, onSessionChange, onHome }) {
-  // Resume old sessions directly to selecting phase if they already have answers
+export default function DiscourseCanvas({ sessionId, tree, setTree, objective, discourseTitle, background = {}, onSessionChange, onHome, initialInterviewQueue = null, onInterviewCycleComplete = null, onContinueExploring = null, onFinishPlanning = null, theme = "sepia", onThemeChange, initialPanelTabs = null }) {
+  // If an initialInterviewQueue is provided (from briefing), start in interviewing phase directly
   const [phase, setPhase] = useState(() => {
-    const hasAnswers = (tree?.children || []).some(c => c.answer !== null);
+    if (initialInterviewQueue && initialInterviewQueue.length > 0) return "interviewing";
+    // Exclude briefing-idea nodes (pre-answered locally) from the "resumed session" check
+    const hasAnswers = (tree?.children || []).some(c => c.answer !== null && !c._briefingIdea);
     return hasAnswers ? "selecting" : "signoff";
   });
 
-  // Interview queue populated only after signoff confirmation
-  const [interviewQueue, setInterviewQueue] = useState([]);
+  // Interview queue populated after signoff confirmation OR passed in from briefing
+  const [interviewQueue, setInterviewQueue] = useState(initialInterviewQueue || []);
   const [interviewIndex, setInterviewIndex] = useState(0);
   const [reviewing, setReviewing] = useState(false);
 
@@ -680,7 +682,13 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
 
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
-  const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [rightPanelWidth, setRightPanelWidth] = useState(280);
+
+  function handleRightPanelWidthChange(w) {
+    setRightPanelWidth(w);
+    rfRef.current?.fitView({ padding: 0.15, duration: 0 });
+  }
 
   const [nodeMenu, setNodeMenu] = useState(null);
   const [movingNodeId, setMovingNodeId] = useState(null);
@@ -705,7 +713,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
   const [addAspectMode, setAddAspectMode] = useState("add-child");
   const [isRecontextualizing, setIsRecontextualizing] = useState(false);
   const [pendingSpinoffs, setPendingSpinoffs] = useState(null);
-  const [theme, setTheme] = useState("sepia");
+  const setTheme = onThemeChange ?? (() => {});
   const [layoutEngine, setLayoutEngine] = useState("dagre");
   const settingsPanelRef = useRef(null);
   const settingsBtnRef = useRef(null);
@@ -728,13 +736,16 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
   const [activeChatThreadId, setActiveChatThreadId] = useState(null);
   const [isChatWaiting, setIsChatWaiting] = useState(false);
 
-  // Panel summary state — pre-populate Overview from landing data on mount
+  // Panel summary state — restore from session if available, else build from objective
   const [panelTabs, setPanelTabs] = useState(() => {
+    if (initialPanelTabs && initialPanelTabs.length > 0) return initialPanelTabs;
     const content = buildOverviewContent(objective, background);
     return [{ id: "overview", title: "Overview", content }];
   });
   const [activePanelTabId, setActivePanelTabId] = useState("overview");
   const [isPanelGenerating, setIsPanelGenerating] = useState(false);
+  const [planStale, setPlanStale] = useState(false);
+  const [discourseFinished, setDiscourseFinished] = useState(false);
 
   // Chat context selectors (auto-sync with focus node and active panel tab)
   const [chatContextNodeId, setChatContextNodeId] = useState("root");
@@ -805,15 +816,21 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
     setTimeout(() => rfRef.current?.fitView({ padding: 0.15, duration: 300 }), 0);
   }
 
-  useEffect(() => {
-    document.body.classList.toggle("theme-dark", theme === "dark");
-  }, [theme]);
 
   // Show interview overlay when queue is ready and we're in interviewing phase
   useEffect(() => {
     if (phase !== "interviewing" || interviewQueue.length === 0) return;
     setInterviewReady(true);
   }, [interviewQueue, phase]);
+
+  // Respond to a new initialInterviewQueue arriving (repeat briefing cycles)
+  useEffect(() => {
+    if (!initialInterviewQueue || initialInterviewQueue.length === 0) return;
+    setInterviewQueue(initialInterviewQueue);
+    setInterviewIndex(0);
+    setReviewing(false);
+    setPhase("interviewing");
+  }, [initialInterviewQueue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-fit canvas when the interview overlay drops (chat opens or phase ends)
   useEffect(() => {
@@ -845,6 +862,20 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
       savedAt: Date.now(),
     });
   }, [tree]);
+
+  useEffect(() => {
+    if (!sessionId || !panelTabs || panelTabs.length === 0) return;
+    // Only persist if the plan has real generated content (more than just the basic overview)
+    if (panelTabs.length === 1 && panelTabs[0].id === "overview") return;
+    onSessionChange?.({
+      sessionId,
+      objective,
+      discourseName: discourseTitle,
+      tree,
+      panelTabs,
+      savedAt: Date.now(),
+    });
+  }, [panelTabs]);
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -902,7 +933,8 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
   function handleConfirmSignoff() {
     const parentId = signoffParentId || "root";
     const parent = findNode(tree, parentId) || tree;
-    const children = (parent?.children || []).filter(c => !c.is_ghost && !c.is_loading);
+    // Exclude already-answered aspects (e.g. ideas auto-answered from briefing)
+    const children = (parent?.children || []).filter(c => !c.is_ghost && !c.is_loading && !c.answer);
     setInterviewQueue(children);
     setInterviewIndex(0);
     setSignoffParentId(null);
@@ -1185,10 +1217,15 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
 
   async function handleGeneratePanel() {
     setIsPanelGenerating(true);
+    setPlanStale(false);
+    setRightPanelOpen(true);
     try {
       const { tabs } = await generatePanelTabs(sessionId);
-      setPanelTabs(tabs);
-      if (tabs.length > 0) setActivePanelTabId(tabs[0].id);
+      // Only update if at least one tab has real content
+      if (tabs.some(t => t.content?.trim())) {
+        setPanelTabs(tabs);
+        if (tabs.length > 0) setActivePanelTabId(tabs[0].id);
+      }
     } catch (err) {
       setApiError(err.message);
     } finally {
@@ -1312,6 +1349,10 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
     } catch (err) { setApiError(err.message); }
   }
 
+  function pruneEmptyThreads(threads) {
+    return threads.filter(t => t.messages.length > 0);
+  }
+
   function handleNewThread() {
     const thread = {
       id: crypto.randomUUID(),
@@ -1321,7 +1362,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
       resolvedAnswerFor: null,
       chatAnswerCleared: false,
     };
-    setChatThreads(prev => [...prev, thread]);
+    setChatThreads(prev => [...pruneEmptyThreads(prev), thread]);
     setActiveChatThreadId(thread.id);
   }
 
@@ -1359,6 +1400,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
   return (
     <div className="app-layout">
       <div className="canvas-header">
+        <div className="canvas-header-left" />
         <span className="canvas-brand" onClick={onHome} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onHome?.()}>midWife</span>
         <div className="canvas-header-actions">
           <button className="canvas-header-btn" onClick={handleExport}>↓ Export</button>
@@ -1663,7 +1705,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
           onAddAspect={handleAddAspectFromChat}
           onSwitchToThreads={handleSwitchToThreadsView}
           initialExpanded={chatOpen}
-          onCollapse={() => { autoLabelThread(activeChatThreadId); setChatOpen(false); }}
+          onCollapse={() => { autoLabelThread(activeChatThreadId); setChatThreads(prev => pruneEmptyThreads(prev)); setChatOpen(false); }}
           interviewPaused={interviewPaused}
           onResumeInterview={() => setInterviewPaused(false)}
           tree={tree}
@@ -1673,6 +1715,9 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
           onContextChange={(nodeId, tabId) => { setChatContextNodeId(nodeId); setChatContextTabId(tabId); }}
           isChatWaiting={isChatWaiting}
           onGeneratePanel={handleGeneratePanel}
+          leftPanelOpen={leftPanelOpen}
+          rightPanelOpen={rightPanelOpen}
+          rightPanelWidth={rightPanelWidth}
         />
       </div>
 
@@ -1683,16 +1728,19 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
           selectedNodeId={selectedNodeId}
           findNode={findNode}
           focusNodeId={focusNodeId}
-          objective={objective}
-          background={background}
           phase={phase}
           panelTabs={panelTabs}
-          activePanelTabId={activePanelTabId}
-          onSwitchTab={setActivePanelTabId}
           onGeneratePanel={handleGeneratePanel}
           isPanelGenerating={isPanelGenerating}
           onCollapse={() => setRightPanelOpen(false)}
-          onExplore={handleExploreNode}
+          onContinueExploring={onContinueExploring}
+          onFinishPlanning={() => {
+            setDiscourseFinished(true);
+            if (onFinishPlanning) onFinishPlanning();
+          }}
+          discourseFinished={discourseFinished}
+          width={rightPanelWidth}
+          onWidthChange={handleRightPanelWidthChange}
         />
       )}
       </div>

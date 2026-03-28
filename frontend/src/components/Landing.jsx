@@ -153,7 +153,7 @@ function ContextQuestion({ question, value, onChange }) {
   return null;
 }
 
-export default function Landing({ onStart, disabled = false, error = null, sessions = [], onResume, onDeleteSession, onClearAllSessions }) {
+export default function Landing({ onStart, disabled = false, error = null, sessions = [], onResume, onDeleteSession, onClearAllSessions, theme = "sepia", onToggleTheme }) {
   const [text, setText] = useState("");
   const [step, setStep] = useState("objective"); // "objective" | "mode" | "context"
   const [modes, setModes] = useState([]);
@@ -163,12 +163,15 @@ export default function Landing({ onStart, disabled = false, error = null, sessi
   const [cycleIdx, setCycleIdx] = useState(0);
   const [fading, setFading] = useState(false);
   const inputRef = useRef(null);
+  const shuffledRef = useRef(
+    [...SUGGESTIONS].sort(() => Math.random() - 0.5)
+  );
 
   useEffect(() => {
     const interval = setInterval(() => {
       setFading(true);
       setTimeout(() => {
-        setCycleIdx(i => (i + 1) % SUGGESTIONS.length);
+        setCycleIdx(i => (i + 1) % shuffledRef.current.length);
         setFading(false);
       }, 280);
     }, 3000);
@@ -236,6 +239,14 @@ export default function Landing({ onStart, disabled = false, error = null, sessi
 
   return (
     <>
+      <button
+        className="landing-theme-btn"
+        onClick={onToggleTheme}
+        title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        aria-label="Toggle theme"
+      >
+        {theme === "dark" ? "☀" : "☽"}
+      </button>
       {sessions.length > 0 && !historyOpen && (
         <button
           className="history-toggle-btn"
@@ -285,7 +296,7 @@ export default function Landing({ onStart, disabled = false, error = null, sessi
               />
               {!text && (
                 <span className={`landing-input-suggestion${fading ? " landing-input-suggestion--fade" : ""}`}>
-                  {SUGGESTIONS[cycleIdx]}
+                  {shuffledRef.current[cycleIdx]}
                 </span>
               )}
             </div>

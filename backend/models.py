@@ -172,3 +172,39 @@ class GenerateAspectsRequest(BaseModel):
 class RecontextualizeResponse(BaseModel):
     updated_ancestors: list[dict] = []
     spinoff_suggestions: list[dict] = []
+
+
+class AspectContext(BaseModel):
+    aspect_name: str
+    rationale: str
+
+
+class BriefingAspect(BaseModel):
+    id: str
+    aspect: str
+    question: str
+    rationale: str
+
+
+class BriefingResponse(BaseModel):
+    overview_prose: str
+    aspect_rationales: list[AspectContext]
+
+
+class BriefingChatRequest(BaseModel):
+    message: str
+    page: str  # "overview"
+    current_overview: str | None = None
+    current_ideas: list[dict] | None = None
+    current_questions: list[dict] | None = None
+
+
+class BriefingChatResponse(BaseModel):
+    acknowledgment: str
+    updated_overview: str | None = None
+    updated_ideas: None = None
+    updated_questions: None = None
+
+
+class BriefingCycleResponse(BaseModel):
+    aspects: list[BriefingAspect]

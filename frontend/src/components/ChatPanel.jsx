@@ -67,6 +67,8 @@ export default function ChatPanel({
   onContextChange,
   isChatWaiting,
   onGeneratePanel,
+  interviewPaused,
+  onResumeInterview,
 }) {
   const [inputDraft, setInputDraft] = useState("");
   const [panelView, setPanelView] = useState("chat");
@@ -241,6 +243,11 @@ export default function ChatPanel({
             )}
             <div ref={messagesEndRef} />
           </div>
+          {interviewPaused && (
+            <button className="chat-bar__resume-btn" onClick={onResumeInterview}>
+              ▶ Resume Interview
+            </button>
+          )}
           {(flatNodes.length > 0 || panelTabs) && (
             <div className="chat-context-row">
               <span className="chat-context-label">About</span>
