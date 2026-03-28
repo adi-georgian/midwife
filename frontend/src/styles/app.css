@@ -50,9 +50,9 @@ body.theme-dark {
   --border:           #383C54;   /* dark navy border */
   --border-light:     #272A3C;   /* very subtle */
   --border-hover:     #8480E8;   /* muted indigo on hover */
-  --text-1:           #D8DCF0;   /* softened off-white */
-  --text-2:           #8A8FA8;   /* muted blue-gray */
-  --text-3:           #5A5F7A;   /* dimmer */
+  --text-1:           #F0F2FF;   /* bright off-white */
+  --text-2:           #C4C8E0;   /* light blue-gray */
+  --text-3:           #9096B8;   /* softer, still readable */
   --accent-bg:        #8480E8;   /* muted indigo */
   --accent-text:      #FFFFFF;
   --accent-hover:     #7370D6;
