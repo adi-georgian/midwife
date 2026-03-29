@@ -65,7 +65,7 @@ export default function DiscourseNode({ data }) {
       {!is_loading && (
         <>
           <span className="discourse-node__label">{aspect}</span>
-          {answer && !isRoot && !isFocus && !hideAnswer && (
+          {answer && !isRoot && !isFocus && (
             <span className="discourse-node__answer">{answer}</span>
           )}
           {description && !isRoot && !isFocus && (

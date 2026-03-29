@@ -732,8 +732,14 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
 
   // Chat state
   const [chatThreads, setChatThreads] = useState([]);
+  const chatThreadsRef = useRef([]);
+  const activeChatThreadIdRef = useRef(null);
   const [activeChatThreadId, setActiveChatThreadId] = useState(null);
   const [isChatWaiting, setIsChatWaiting] = useState(false);
+
+  // Keep refs in sync so autoLabelThread always reads current values
+  chatThreadsRef.current = chatThreads;
+  activeChatThreadIdRef.current = activeChatThreadId;
 
   // Panel summary state — restore from session if available, else build from objective
   const [panelTabs, setPanelTabs] = useState(() => {
@@ -891,14 +897,17 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
 
   async function autoLabelThread(threadId) {
     if (!threadId) return;
-    const thread = chatThreads.find(t => t.id === threadId);
+    const thread = chatThreadsRef.current.find(t => t.id === threadId);
     if (!thread || thread.title !== "New Chat" || thread.messages.length < 2) return;
     try {
-      const { label } = await labelChat(thread.messages);
+      const messages = thread.messages.map(m => ({ role: m.role, content: m.content }));
+      const { label } = await labelChat(messages);
       if (label) {
         setChatThreads(prev => prev.map(t => t.id === threadId ? { ...t, title: toTitleCase(label) } : t));
       }
-    } catch {}
+    } catch (err) {
+      console.warn("autoLabelThread failed:", err);
+    }
   }
 
   async function handleReviewSubmit() {
@@ -1331,6 +1340,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
     setChatThreads(prev =>
       prev.map(t => t.aspectId === aspectId ? { ...t, resolvedAnswerFor: aspectId } : t)
     );
+    autoLabelThread(activeChatThreadIdRef.current);
     setChatOpen(false);
     setInterviewPaused(false);
   }
@@ -1372,14 +1382,14 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
   }
 
   function handleSelectThread(newThreadId) {
-    if (newThreadId !== activeChatThreadId) {
-      autoLabelThread(activeChatThreadId);
+    if (newThreadId !== activeChatThreadIdRef.current) {
+      autoLabelThread(activeChatThreadIdRef.current);
     }
     setActiveChatThreadId(newThreadId);
   }
 
   function handleSwitchToThreadsView() {
-    autoLabelThread(activeChatThreadId);
+    autoLabelThread(activeChatThreadIdRef.current);
   }
 
   function handleExport() {
@@ -1567,7 +1577,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
           maxZoom={2}
         >
           <AutoLayout focusNodeId={focusNodeId} layoutEngine={layoutEngine} graphVersion={graphVersion} />
-          <Background color={theme === "dark" ? "#252838" : "#D4C4B0"} gap={28} variant="dots" size={1} />
+          <Background color={theme === "dark" ? "#3a3d52" : "#b8a898"} gap={28} variant="dots" size={2} />
           <Controls showFitView={false}>
             <ControlButton
               onClick={() => { setLeftPanelOpen(false); setRightPanelOpen(false); }}
@@ -1681,7 +1691,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
           onUseAsAnswer={handleUseAsAnswer}
           onSwitchToThreads={handleSwitchToThreadsView}
           initialExpanded={chatOpen}
-          onCollapse={() => { autoLabelThread(activeChatThreadId); setChatThreads(prev => pruneEmptyThreads(prev)); setChatOpen(false); }}
+          onCollapse={() => { autoLabelThread(activeChatThreadIdRef.current); setChatThreads(prev => pruneEmptyThreads(prev)); setChatOpen(false); }}
           interviewPaused={interviewPaused}
           onResumeInterview={() => setInterviewPaused(false)}
           tree={tree}

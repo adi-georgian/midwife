@@ -196,7 +196,13 @@ export default function App() {
 
   async function handleBriefingConfirm(finalAspects) {
     if (!discourseReady) {
-      // Cycle 0: reconcile against original tree children
+      // Cycle 0: null means "keep all aspects as-is" (aspects page was skipped)
+      if (finalAspects === null) {
+        setBriefingOpen(false);
+        setDiscourseReady(true);
+        return;
+      }
+      // Reconcile against original tree children
       const originalIds = new Set((tree?.children || []).map(c => c.id));
       const removedOnes = (tree?.children || []).filter(c => !finalAspects.find(a => a.id === c.id));
       const renamedOnes = finalAspects.filter(a => a._edited && originalIds.has(a.id));

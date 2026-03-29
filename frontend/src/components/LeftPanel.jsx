@@ -416,11 +416,11 @@ function NavCard({
             <div className="lpanel-child-row-header">
               <span className="lpanel-child-label">{node.aspect}</span>
             </div>
-            {depth === 0 && (isAnswered ? (
-              <span className="lpanel-child-question">{node.answer}</span>
-            ) : node.question ? (
+            {isAnswered ? (
+              <span className="lpanel-child-question">{node.description || node.answer}</span>
+            ) : node.question && depth === 0 ? (
               <span className="lpanel-child-question">{node.question}</span>
-            ) : null)}
+            ) : null}
           </>
         )}
         {showActions && !movingNodeId && (

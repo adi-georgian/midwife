@@ -3138,7 +3138,7 @@ body.theme-dark .discourse-node__desc {
 
 .lpanel-child-row--gc .lpanel-child-label {
   font-size: 0.76rem;
-  font-weight: 400;
+  font-weight: 700;
 }
 
 /* Override connector offsets for gc rows */
@@ -4629,16 +4629,68 @@ body.theme-dark .discourse-node__desc {
 .guide-page {}
 
 /* Overview page */
-.guide-overview-prose p {
-  font-family: var(--font-sans);
-  font-size: 0.9rem;
-  line-height: 1.7;
-  color: var(--text-2);
-  margin: 0 0 14px;
+.guide-overview-prose .rpanel-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
-.guide-overview-prose p:last-child {
-  margin-bottom: 0;
+.guide-overview-prose .rpanel-plan-p {
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1.65;
+  color: var(--text-1);
+  margin: 0 0 16px;
+}
+
+.guide-overview-prose .rpanel-plan-h3 {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin: 20px 0 8px;
+  padding-left: 10px;
+  border-left: 2px solid var(--blue-badge);
+}
+
+.guide-overview-prose .rpanel-plan-h3:first-child {
+  margin-top: 4px;
+}
+
+.guide-overview-prose .rpanel-plan-list {
+  margin: 0 0 4px 0;
+  padding-left: 18px;
+  list-style: none;
+}
+
+.guide-overview-prose .rpanel-plan-list li {
+  position: relative;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--text-2);
+  padding: 3px 0 3px 14px;
+}
+
+.guide-overview-prose .rpanel-plan-list li::before {
+  content: "–";
+  position: absolute;
+  left: 0;
+  color: var(--text-3);
+}
+
+.guide-overview-hint {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-3);
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--bg-2, var(--bg));
+  border: 1px solid var(--border-light);
 }
 
 /* Ideas / Questions pages (single column) */

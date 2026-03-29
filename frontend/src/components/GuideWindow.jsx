@@ -242,7 +242,7 @@ export default function GuideWindow({
   onRetryOverview,
   sessionId,
 }) {
-  const pageList = ["overview", "aspects"];
+  const pageList = cycle === 0 ? ["overview"] : ["overview", "aspects"];
   const [pageIndex, setPageIndex] = useState(0);
   const currentPage = pageList[pageIndex];
 
@@ -308,7 +308,7 @@ export default function GuideWindow({
 
   const isFirst = pageIndex === 0;
   const isLast = pageIndex === pageList.length - 1;
-  const showChat = currentPage === "overview" && cycle === 0 && !!localOverview;
+  const showChat = currentPage === "overview" && cycle === 0;
 
   const confirmLabel = cycle === 0 ? "Let's go →" : "Add These →";
 
@@ -322,9 +322,11 @@ export default function GuideWindow({
             <span className="guide-header__label">Briefing</span>
             <h2 className="guide-header__title">{PAGE_TITLES[currentPage]}</h2>
           </div>
-          <div className="guide-progress-dots-wrap">
-            <ProgressDots pages={pageList} currentIndex={pageIndex} />
-          </div>
+          {pageList.length > 1 && (
+            <div className="guide-progress-dots-wrap">
+              <ProgressDots pages={pageList} currentIndex={pageIndex} />
+            </div>
+          )}
         </div>
 
         {/* Body */}
@@ -404,6 +406,9 @@ export default function GuideWindow({
         {/* Chat section — only on cycle 0 overview */}
         {showChat && (
           <div className="guide-chat-section">
+            <p className="guide-overview-hint">
+              Midwife will start by interviewing you about some relevant Aspects. You can modify, delete, or add your own Aspects as well.
+            </p>
             {acknowledgment && (
               <div className="guide-ack">{acknowledgment}</div>
             )}
@@ -411,7 +416,7 @@ export default function GuideWindow({
               <textarea
                 ref={chatInputRef}
                 className="chat-bar__input guide-chat-input"
-                placeholder="Anything to add?"
+                placeholder="Anything to add before we start?"
                 value={chatDraft}
                 onChange={e => setChatDraft(e.target.value)}
                 onKeyDown={handleChatKeyDown}
@@ -462,8 +467,8 @@ export default function GuideWindow({
               {isLast && (
                 <button
                   className="guide-nav-btn guide-nav-btn--confirm"
-                  onClick={() => onConfirm(localAspects)}
-                  disabled={localAspects.length === 0}
+                  onClick={() => cycle === 0 ? onConfirm(null) : onConfirm(localAspects)}
+                  disabled={cycle > 0 && localAspects.length === 0}
                 >
                   {confirmLabel}
                 </button>
