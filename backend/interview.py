@@ -244,12 +244,9 @@ Help the user think through the specific aspect they are unsure about.
 Ask follow-up questions if they need help clarifying their thinking.
 Keep responses concise (2-4 sentences). Be warm and practical.
 Always respond with valid JSON only:
-{"reply": "...", "suggested_answer": null, "suggested_answers": [], "new_aspects": [], "updated_aspect": null, "updated_question": null}
+{"reply": "...", "suggested_answer": null, "suggested_answers": [], "updated_aspect": null, "updated_question": null}
 - If the user has clearly settled on exactly ONE specific answer, extract it as suggested_answer (short phrase). If they selected one of the pre-defined options, use the EXACT option text as given — never paraphrase, rename, or rephrase it. Leave null if no clear answer.
 - If the user explicitly wants to select TWO OR MORE distinct options together (multi-select), leave suggested_answer null and instead list each option separately in suggested_answers (e.g. ["Option A", "Option B"]). Leave as empty list if zero or one option.
-- If the conversation surfaces new distinct planning dimensions that deserve their own node in the discourse tree (a new concern, constraint, or decision the user raised), list them in new_aspects as:
-  [{"aspect": "2-5 word label", "question": "the Socratic question to ask", "suggestions": ["option1", "option2", "option3"]}]
-  Otherwise leave new_aspects as an empty list.
 - updated_aspect and updated_question: if the user indicates the current question/framing doesn't fit them, reframe it by setting these fields (updated_aspect: new 2-5 word label, updated_question: new Socratic question). Otherwise leave both null."""
 
 
@@ -416,8 +413,7 @@ def generate_chat_reply(
             f"As soon as the conversation points to a clear answer (even rough), "
             f"set suggested_answer to a short phrase that captures it. "
             f"IMPORTANT: If the answer matches one of the pre-defined options, use that option's EXACT text — never paraphrase it. "
-            f"Keep new_aspects as an empty list unless the user themselves explicitly raises "
-            f"a genuinely new and distinct concern — do not proactively suggest sub-topics."
+            f"Do not proactively suggest sub-topics or new planning dimensions."
         )
     if tab_context:
         system += (
@@ -429,8 +425,8 @@ def generate_chat_reply(
         )
         # Extend the JSON schema in CHAT_SYSTEM to include updated_tab_content
         system = system.replace(
-            '{"reply": "...", "suggested_answer": null, "suggested_answers": [], "new_aspects": [], "updated_aspect": null, "updated_question": null}',
-            '{"reply": "...", "suggested_answer": null, "suggested_answers": [], "new_aspects": [], "updated_aspect": null, "updated_question": null, "updated_tab_content": null}'
+            '{"reply": "...", "suggested_answer": null, "suggested_answers": [], "updated_aspect": null, "updated_question": null}',
+            '{"reply": "...", "suggested_answer": null, "suggested_answers": [], "updated_aspect": null, "updated_question": null, "updated_tab_content": null}'
         )
 
     raw = _generate_text(system, messages, temperature=0.7)
@@ -447,13 +443,12 @@ def generate_chat_reply(
             data["reply"],
             data.get("suggested_answer"),
             data.get("suggested_answers", []),
-            data.get("new_aspects", []),
             data.get("updated_aspect"),
             data.get("updated_question"),
             updated_tab,
         )
     except Exception:
-        return raw, None, [], [], None, None, None
+        return raw, None, [], None, None, None
 
 
 def recontextualize_ancestors(objective: str, ancestors: list[dict], mode: str = "") -> dict:
@@ -527,18 +522,13 @@ def generate_questions(
 
     if background:
         bg_lines = []
-        if background.get("help_level"):
-            bg_lines.append(f"Level of help needed: {background['help_level']}")
-        if background.get("prior_knowledge"):
-            bg_lines.append(f"What the user already knows: {background['prior_knowledge']}")
-        if background.get("already_planned"):
-            bg_lines.append(f"What is already planned: {background['already_planned']}")
-        if background.get("constraints"):
-            bg_lines.append(f"Known constraints: {background['constraints']}")
+        for pair in (background.get("qa_pairs") or []):
+            if pair.get("question") and pair.get("answer"):
+                bg_lines.append(f"{pair['question']}: {pair['answer']}")
         if background.get("knowledge_level"):
             level = background["knowledge_level"]
-            bg_lines.append(f"User's familiarity with this topic: {level}.")
-            if level in ("complete beginner", "some knowledge"):
+            bg_lines.append(f"How familiar the user is with this topic: {level}.")
+            if level.lower() in ("complete beginner", "some knowledge", "nothing yet", "some basics"):
                 system_instruction += (
                     "\n\nIMPORTANT: The user is a beginner. For EACH question, prepend a single plain-English sentence "
                     "that briefly explains the concept being asked about, so the user understands what it means before answering. "

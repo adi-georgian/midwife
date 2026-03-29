@@ -20,7 +20,6 @@ import NodeContextMenu from "./NodeContextMenu";
 import CreateNodeModal from "./CreateNodeModal";
 import LeftPanel from "./LeftPanel";
 import RepurposingModal from "./RepurposingModal";
-import PendingTopicsModal from "./PendingTopicsModal";
 import { answerAspect, elaborateAspect, addAspect, sendChatMessage, labelChat, deleteAspect, moveAspect, recontextualizeAspect, generatePanelTabs, updateAspect } from "../api";
 import { toTitleCase } from "../utils";
 import dagre from "@dagrejs/dagre";
@@ -660,7 +659,7 @@ function AutoLayout({ focusNodeId, layoutEngine, graphVersion }) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function DiscourseCanvas({ sessionId, tree, setTree, objective, discourseTitle, background = {}, onSessionChange, onHome, initialInterviewQueue = null, onInterviewCycleComplete = null, onContinueExploring = null, onFinishPlanning = null, theme = "sepia", onThemeChange, initialPanelTabs = null }) {
+export default function DiscourseCanvas({ sessionId, tree, setTree, objective, discourseTitle, background = {}, onSessionChange, onHome, initialInterviewQueue = null, onInterviewCycleComplete = null, onContinueExploring = null, onFinishPlanning = null, theme = "sepia", onThemeChange, initialPanelTabs = null, initialDiscourseFinished = false }) {
   // If an initialInterviewQueue is provided (from briefing), start in interviewing phase directly
   const [phase, setPhase] = useState(() => {
     if (initialInterviewQueue && initialInterviewQueue.length > 0) return "interviewing";
@@ -699,7 +698,6 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
 
   const [interviewPaused, setInterviewPaused] = useState(false);
   const [signoffParentId, setSignoffParentId] = useState(null);
-  const [pendingNewTopics, setPendingNewTopics] = useState([]);
 
   const [interviewReady, setInterviewReady] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
@@ -744,7 +742,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
   const [activePanelTabId, setActivePanelTabId] = useState("overview");
   const [isPanelGenerating, setIsPanelGenerating] = useState(false);
   const [planStale, setPlanStale] = useState(false);
-  const [discourseFinished, setDiscourseFinished] = useState(false);
+  const [discourseFinished, setDiscourseFinished] = useState(initialDiscourseFinished);
 
   // Chat context selectors (auto-sync with focus node and active panel tab)
   const [chatContextNodeId, setChatContextNodeId] = useState("root");
@@ -1289,34 +1287,10 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
       content: data.reply,
       suggestedAnswer: data.suggested_answer || null,
       suggestedAnswers: data.suggested_answers?.length > 0 ? data.suggested_answers : null,
-      newAspects: data.new_aspects?.length > 0 ? data.new_aspects : null,
     };
     setChatThreads(prev =>
       prev.map(t => t.id === activeChatThreadId ? { ...t, messages: [...updatedMessages, assistantMsg] } : t)
     );
-  }
-
-  async function handleAddAspectFromChat(aspectDef, parentId) {
-    if (phase === "interviewing" && currentNode) {
-      setPendingNewTopics(prev => [...prev, {
-        aspectDef,
-        parentId,
-        fromAspect: currentNode.aspect,
-        fromQuestion: currentNode.question,
-      }]);
-      return;
-    }
-    let result;
-    try {
-      result = await addAspect(sessionId, parentId || "root", aspectDef);
-    } catch (err) { setApiError(err.message); return; }
-    const newNode = result.aspect;
-    setTree(prev => {
-      const parent = findNode(prev, parentId || "root");
-      return patchNode(prev, parentId || "root", {
-        children: [...(parent?.children || []), newNode],
-      });
-    });
   }
 
   async function handleUseAsAnswer(aspectId, content) {
@@ -1669,24 +1643,6 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
           </div>
         )}
 
-        {pendingNewTopics.length > 0 && phase === "selecting" && (
-          <PendingTopicsModal
-            topics={pendingNewTopics}
-            onApprove={async (topic, index) => {
-              const result = await addAspect(sessionId, topic.parentId || "root", topic.aspectDef);
-              const newNode = result.aspect;
-              setTree(prev => {
-                const parent = findNode(prev, topic.parentId || "root");
-                return patchNode(prev, topic.parentId || "root", {
-                  children: [...(parent?.children || []), newNode],
-                });
-              });
-              setPendingNewTopics(prev => prev.filter((_, i) => i !== index));
-            }}
-            onReject={(index) => setPendingNewTopics(prev => prev.filter((_, i) => i !== index))}
-            onDismissAll={() => setPendingNewTopics([])}
-          />
-        )}
 
         <ChatBar
           threads={chatThreads}
@@ -1695,7 +1651,6 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
           onSelectThread={handleSelectThread}
           onSendMessage={handleSendChatMessage}
           onUseAsAnswer={handleUseAsAnswer}
-          onAddAspect={handleAddAspectFromChat}
           onSwitchToThreads={handleSwitchToThreadsView}
           initialExpanded={chatOpen}
           onCollapse={() => { autoLabelThread(activeChatThreadId); setChatThreads(prev => pruneEmptyThreads(prev)); setChatOpen(false); }}
@@ -1707,7 +1662,6 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
           chatContextTabId={chatContextTabId}
           onContextChange={(nodeId, tabId) => { setChatContextNodeId(nodeId); setChatContextTabId(tabId); }}
           isChatWaiting={isChatWaiting}
-          onGeneratePanel={handleGeneratePanel}
           leftPanelOpen={leftPanelOpen}
           rightPanelOpen={rightPanelOpen}
           rightPanelWidth={rightPanelWidth}
@@ -1729,6 +1683,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
           onContinueExploring={onContinueExploring}
           onFinishPlanning={() => {
             setDiscourseFinished(true);
+            onSessionChange?.({ sessionId, discourseFinished: true });
             if (onFinishPlanning) onFinishPlanning();
           }}
           discourseFinished={discourseFinished}

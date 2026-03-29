@@ -8,7 +8,6 @@ export default function ChatBar({
   onSelectThread,
   onSendMessage,
   onUseAsAnswer,
-  onAddAspect,
   onSwitchToThreads,
   initialExpanded,
   onCollapse,
@@ -20,7 +19,6 @@ export default function ChatBar({
   chatContextTabId,
   onContextChange,
   isChatWaiting,
-  onGeneratePanel,
   leftPanelOpen = true,
   rightPanelOpen = false,
   rightPanelWidth = 280,
@@ -121,7 +119,6 @@ export default function ChatBar({
             onNewThread={onNewThread}
             onSendMessage={onSendMessage}
             onUseAsAnswer={onUseAsAnswer}
-            onAddAspect={onAddAspect}
             onSwitchToThreads={onSwitchToThreads}
             onClose={handleClose}
             tree={tree}
@@ -130,7 +127,6 @@ export default function ChatBar({
             chatContextTabId={chatContextTabId}
             onContextChange={onContextChange}
             isChatWaiting={isChatWaiting}
-            onGeneratePanel={onGeneratePanel}
             interviewPaused={interviewPaused}
             onResumeInterview={onResumeInterview}
           />

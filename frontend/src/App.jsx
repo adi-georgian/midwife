@@ -89,6 +89,7 @@ export default function App() {
   }
 
   const [resumePanelTabs, setResumePanelTabs] = useState(null);
+  const [resumeDiscourseFinished, setResumeDiscourseFinished] = useState(false);
 
   function handleResumeSession(entry) {
     setSessionId(entry.sessionId);
@@ -97,6 +98,7 @@ export default function App() {
     setTree(entry.tree);
     setBackground(entry.background || {});
     setResumePanelTabs(entry.panelTabs || null);
+    setResumeDiscourseFinished(entry.discourseFinished || false);
     setDiscourseReady(true);
     setView("discourse");
   }
@@ -175,6 +177,8 @@ export default function App() {
       });
       setView("discourse");
       setDiscourseReady(false);
+      setResumePanelTabs(null);
+      setResumeDiscourseFinished(false);
       // Open briefing window and load content asynchronously
       setBriefingCycle(0);
       setBriefingData(null);
@@ -319,6 +323,7 @@ export default function App() {
           theme={theme}
           onThemeChange={setTheme}
           initialPanelTabs={resumePanelTabs}
+          initialDiscourseFinished={resumeDiscourseFinished}
         />
       )}
 

@@ -1866,24 +1866,6 @@ body.theme-dark .lpanel-focus-description {
   background: var(--choose-btn-hover);
 }
 
-.chat-add-to-plan-btn {
-  display: inline-block;
-  margin-top: 8px;
-  padding: 3px 9px;
-  font-size: 0.74rem;
-  background: none;
-  color: var(--text-3);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  cursor: pointer;
-  font-family: inherit;
-  transition: color 0.12s, border-color 0.12s;
-}
-
-.chat-add-to-plan-btn:hover {
-  color: var(--text-1);
-  border-color: var(--border-hover);
-}
 
 .choose-answer:disabled {
   background: var(--surface-alt);
@@ -1901,111 +1883,6 @@ body.theme-dark .lpanel-focus-description {
   cursor: default;
 }
 
-.new-aspects-bar {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.new-aspects-label {
-  font-size: 0.72rem;
-  color: var(--text-3);
-  font-weight: 500;
-}
-
-.new-aspect-chip {
-  padding: 3px 10px;
-  font-size: 0.75rem;
-  background: var(--chip-chat-bg);
-  color: var(--chip-chat-text);
-  border: 1.5px solid var(--chip-chat-border);
-  border-radius: 12px;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.new-aspect-chip:hover {
-  border-color: var(--border-hover);
-}
-
-.new-aspect-chip--added {
-  background: var(--chip-sel-bg);
-  color: var(--chip-sel-text);
-  border-color: var(--chip-sel-border);
-  opacity: 0.75;
-  cursor: default;
-}
-
-.new-aspect-chip--added:hover {
-  background: var(--chip-sel-bg);
-  border-color: var(--chip-sel-border);
-}
-
-.new-aspect-row {
-  background: var(--surface-alt);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  margin-top: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.new-aspect-row__label {
-  font-size: 0.78rem;
-  color: var(--text-2);
-}
-
-.new-aspect-row__label strong {
-  color: var(--text-1);
-}
-
-.new-aspect-row__controls {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.new-aspect-row__select {
-  flex: 1;
-  min-width: 0;
-  font-size: 0.75rem;
-  font-family: inherit;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 3px 6px;
-  background: var(--surface);
-  color: var(--text-1);
-  cursor: pointer;
-}
-
-.new-aspect-row__add-btn {
-  flex-shrink: 0;
-  font-size: 0.75rem;
-  font-family: inherit;
-  font-weight: 600;
-  padding: 3px 10px;
-  border: none;
-  border-radius: 6px;
-  background: var(--accent-bg);
-  color: var(--accent-text);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.new-aspect-row__add-btn:hover {
-  background: var(--accent-hover);
-}
-
-.new-aspect-row--added {
-  background: var(--chip-sel-bg);
-  border-color: var(--chip-sel-border);
-  font-size: 0.78rem;
-  color: var(--chip-sel-text);
-}
 
 .chat-input-row {
   display: flex;
@@ -4053,7 +3930,7 @@ body.theme-dark .lpanel-focus-description {
 .recontexting-indicator {
   position: absolute;
   top: 12px;
-  right: 160px;
+  right: 280px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 20px;

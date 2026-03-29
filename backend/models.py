@@ -26,6 +26,7 @@ class SessionState(BaseModel):
     mode: str = ""
     background: dict = {}
     root: AspectNode
+    discourse_name: str = ""
 
     def find_node(self, node_id: str) -> AspectNode | None:
         return self._find_node(self.root, node_id)
@@ -147,7 +148,6 @@ class ChatResponse(BaseModel):
     reply: str
     suggested_answer: str | None = None
     suggested_answers: list[str] = []
-    new_aspects: list[dict] = []
     updated_aspect: str | None = None
     updated_question: str | None = None
     updated_tab: PanelTab | None = None

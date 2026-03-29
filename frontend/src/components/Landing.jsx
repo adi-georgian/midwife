@@ -211,7 +211,7 @@ export default function Landing({ onStart, disabled = false, error = null, sessi
   }
 
   function buildBackground() {
-    const bg = { mode: modes.join(","), helpLevel: "", priorKnowledge: "", alreadyPlanned: "", constraints: "", knowledgeLevel: "", extraContext: extraContext.trim() };
+    const bg = { mode: modes.join(","), knowledgeLevel: "", extraContext: extraContext.trim(), qaPairs: [] };
     for (const modeId of modes) {
       const questions = MODE_QUESTIONS[modeId] || [];
       const modeAnswers = answers[modeId] || {};
@@ -220,10 +220,10 @@ export default function Landing({ onStart, disabled = false, error = null, sessi
         if (!val || (Array.isArray(val) && val.length === 0)) continue;
         const str = Array.isArray(val) ? val.join(", ") : val;
         const prefixed = q.prefix ? q.prefix + str : str;
-        if (bg[q.field] && bg[q.field].trim()) {
-          bg[q.field] += "; " + prefixed;
+        if (q.field === "knowledgeLevel") {
+          bg.knowledgeLevel = prefixed;
         } else {
-          bg[q.field] = prefixed;
+          bg.qaPairs.push({ question: q.label, answer: prefixed });
         }
       }
     }

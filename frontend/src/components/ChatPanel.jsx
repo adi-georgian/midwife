@@ -9,46 +9,6 @@ function flattenTree(node, depth = 0, result = []) {
   return result;
 }
 
-function NewAspectRow({ aspect, tree, onAdd, added }) {
-  const nodes = useMemo(() => flattenTree(tree), [tree]);
-  const [parentId, setParentId] = useState("root");
-
-  if (added) {
-    return (
-      <div className="new-aspect-row new-aspect-row--added">
-        <span>✓ Added <strong>{aspect.aspect}</strong></span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="new-aspect-row">
-      <div className="new-aspect-row__label">
-        Add <strong>{aspect.aspect}</strong> under:
-      </div>
-      <div className="new-aspect-row__controls">
-        <select
-          className="new-aspect-row__select"
-          value={parentId}
-          onChange={e => setParentId(e.target.value)}
-        >
-          {nodes.map(n => (
-            <option key={n.id} value={n.id}>
-              {'\u00A0'.repeat(n.depth * 3)}{n.label}
-            </option>
-          ))}
-        </select>
-        <button
-          className="new-aspect-row__add-btn"
-          onClick={() => onAdd(aspect, parentId)}
-        >
-          Add →
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export default function ChatPanel({
   sessionId,
   threads,
@@ -57,7 +17,6 @@ export default function ChatPanel({
   onNewThread,
   onSendMessage,
   onUseAsAnswer,
-  onAddAspect,
   onSwitchToThreads,
   onClose,
   tree,
@@ -66,13 +25,11 @@ export default function ChatPanel({
   chatContextTabId,
   onContextChange,
   isChatWaiting,
-  onGeneratePanel,
   interviewPaused,
   onResumeInterview,
 }) {
   const [inputDraft, setInputDraft] = useState("");
   const [panelView, setPanelView] = useState("chat");
-  const [addedAspects, setAddedAspects] = useState(new Set());
   const [usedAnswer, setUsedAnswer] = useState(null);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -206,30 +163,6 @@ export default function ChatPanel({
                     {usedAnswer === msg.suggestedAnswer || activeThread.resolvedAnswerFor
                       ? `✓ Selected "${msg.suggestedAnswer}"`
                       : `Choose "${msg.suggestedAnswer}"`}
-                  </button>
-                )}
-                {msg.role === "assistant" && msg.newAspects?.length > 0 && (
-                  <div className="new-aspects-bar">
-                    {msg.newAspects.map((a, j) => (
-                      <NewAspectRow
-                        key={j}
-                        aspect={a}
-                        tree={tree}
-                        added={addedAspects.has(a.aspect)}
-                        onAdd={(aspect, parentId) => {
-                          setAddedAspects(prev => new Set([...prev, aspect.aspect]));
-                          onAddAspect?.(
-                            { aspect: aspect.aspect, question: aspect.question, suggestions: aspect.suggestions || [] },
-                            parentId
-                          );
-                        }}
-                      />
-                    ))}
-                  </div>
-                )}
-                {msg.role === "assistant" && onGeneratePanel && (
-                  <button className="chat-add-to-plan-btn" onClick={onGeneratePanel} title="Refresh the Plan panel with this conversation">
-                    ↻ Add to Plan
                   </button>
                 )}
               </div>

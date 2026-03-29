@@ -120,6 +120,8 @@ async def create_session(request: CreateSessionRequest):
         store.create_session(session)
 
         discourse_name = generate_discourse_name(request.objective)
+        session.discourse_name = discourse_name
+        store.save_session(session)
         return CreateSessionResponse(session_id=session_id, aspects=aspects, discourse_name=discourse_name)
     except (ServerError, ClientError, _anthropic.APIStatusError, RuntimeError) as e:
         raise HTTPException(status_code=503, detail="AI service is currently overloaded. Please try again in a moment.")
@@ -384,7 +386,7 @@ async def chat(session_id: str, request: ChatRequest):
         answered = collect_answered_aspects(session.root)
         existing_aspects = collect_aspects(session.root)
         tab_ctx = request.tab_context.model_dump() if request.tab_context else None
-        reply, suggested_answer, suggested_answers, new_aspects, updated_aspect, updated_question, updated_tab = generate_chat_reply(
+        reply, suggested_answer, suggested_answers, updated_aspect, updated_question, updated_tab = generate_chat_reply(
             objective=session.objective,
             messages=[m.model_dump() for m in request.messages],
             aspect_context=request.aspect_context,
@@ -398,7 +400,6 @@ async def chat(session_id: str, request: ChatRequest):
             reply=reply,
             suggested_answer=suggested_answer,
             suggested_answers=suggested_answers,
-            new_aspects=new_aspects,
             updated_aspect=updated_aspect,
             updated_question=updated_question,
             updated_tab=updated_tab_model,
