@@ -296,82 +296,107 @@ def _tree_to_text(node: dict, depth: int = 0) -> str:
 
 
 def generate_panel_tabs(objective: str, mode: str, background: dict, tree: dict, title: str = "") -> list[dict]:
-    """Generate all panel tab contents for the given session."""
-    primary_mode = mode.split(",")[0].strip() if mode else ""
-    tabs_def = PANEL_TABS_BY_MODE.get(primary_mode, DEFAULT_TABS)
-    tab_names = {t["id"]: t["title"] for t in tabs_def}
-
+    """Generate an interactive structured plan for the given session."""
     tree_text = _tree_to_text(tree)
 
     bg_lines = []
+    for pair in (background or {}).get("qa_pairs") or []:
+        if pair.get("question") and pair.get("answer"):
+            bg_lines.append(f"- {pair['question']}: {pair['answer']}")
     for k, v in (background or {}).items():
-        if v and str(v).strip():
+        if k not in ("qa_pairs", "mode", "extra_context") and v and str(v).strip():
             bg_lines.append(f"- {k.replace('_', ' ').title()}: {v}")
+    if (background or {}).get("extra_context"):
+        bg_lines.append(f"- Additional context: {background['extra_context']}")
     bg_text = "\n".join(bg_lines) if bg_lines else "None provided."
 
-    tab_ids_str = ", ".join(f'"{t["id"]}"' for t in tabs_def)
-
-    def _tab_desc(t):
-        if t["id"] == "overview":
-            return (
-                '- "overview": A full, well-structured plan document in markdown. '
-                'Use ## headers with relevant emojis for each section '
-                '(e.g. "## 🎯 Goal", "## 💡 Key Decisions", "## ✅ Action Steps", '
-                '"## ⚠️ Watch Out For", "## ❓ Open Questions"). '
-                'Use - bullet points under each section. Use **bold** for key terms. '
-                'Be specific and grounded in what was actually discussed. '
-                'This should read like a real, actionable deliverable — not a brief summary.'
-            )
-        return f'- "{t["id"]}" ({t["title"]}): focused markdown content for this section using bullet points and **bold** for key terms'
-
-    tab_descriptions = "\n".join(_tab_desc(t) for t in tabs_def)
-
     system = (
-        "You are a planning assistant generating a plan document for a Socratic planning session. "
-        "Based on the objective, background, and discourse tree, generate rich markdown content for each tab. "
-        "Be concrete, specific, and grounded in what the user actually said. "
-        "Use ## headers, - bullet points, and **bold** for key terms throughout. "
-        "Respond with valid JSON only: a single object where each key is a tab id and the value is a markdown string.\n"
-        f"Tabs to fill:\n{tab_descriptions}"
+        "You are a planning assistant generating an actionable plan for a Socratic planning session.\n"
+        "Based on the objective, background context, and the discourse tree of answered questions, "
+        "produce a structured JSON plan the user can act on immediately.\n\n"
+        "Output a single JSON object with this exact shape:\n"
+        '{\n'
+        '  "sections": [\n'
+        '    {\n'
+        '      "type": "tasks",\n'
+        '      "title": "Action Steps",\n'
+        '      "items": [{"id": "t1", "text": "Concrete action verb + what to do"}]\n'
+        '    },\n'
+        '    {\n'
+        '      "type": "timeline",\n'
+        '      "title": "Timeline",\n'
+        '      "items": [{"id": "tl1", "phase": "Week 1", "label": "Milestone description"}]\n'
+        '    },\n'
+        '    {\n'
+        '      "type": "watchout",\n'
+        '      "title": "Watch Out For",\n'
+        '      "items": [{"id": "w1", "text": "Risk or obstacle to be aware of"}]\n'
+        '    },\n'
+        '    {\n'
+        '      "type": "questions",\n'
+        '      "title": "Open Questions",\n'
+        '      "items": [{"id": "q1", "text": "Unresolved question worth thinking about"}]\n'
+        '    }\n'
+        '  ]\n'
+        '}\n\n'
+        "Rules:\n"
+        "- tasks: 3-6 concrete, measurable, first-person action items (start with a verb: Research, Book, Draft, etc.)\n"
+        "- timeline: 3-5 phases with realistic labels (use mentioned timeframes, or rough labels like 'Week 1', 'Month 1')\n"
+        "- watchout: 2-4 real risks or blockers grounded in what was discussed — not generic advice\n"
+        "- questions: 2-3 meaningful unresolved questions from the discussion\n"
+        "- Omit a section entirely if there is genuinely nothing meaningful to put in it\n"
+        "- Be specific and grounded in what the user actually said — do NOT hallucinate items\n"
+        "- Respond with valid JSON only — no prose, no code fences"
     )
     if mode:
         instr = _mode_instructions(mode)
         if instr:
             system += "\n\n" + instr
 
-    json_example = "{" + ", ".join('"' + t["id"] + '": "..."' for t in tabs_def) + "}"
     prompt = (
         f"Objective: {objective}\n\n"
         f"Background context:\n{bg_text}\n\n"
         f"Discourse tree (aspects and answers):\n{tree_text}\n\n"
-        f"Generate content for these tabs: {tab_ids_str}.\n"
-        f"Respond with JSON only: {json_example}"
+        f"Generate the structured plan JSON now."
     )
 
-    raw = _generate_text(system, prompt, temperature=0.4, max_tokens=8192)
+    raw = _generate_text(system, prompt, temperature=0.4, max_tokens=4096)
     try:
-        data = _extract_json(raw)
+        plan_data = _extract_json(raw)
     except Exception:
-        data = {}
+        plan_data = {"sections": []}
 
-    result = []
-    for tab in tabs_def:
-        content = data.get(tab["id"], "")
-        if tab["id"] == "overview" and content:
-            # Strip any LLM-generated # title line(s) at the top
-            lines = content.lstrip("\n").splitlines()
-            while lines and lines[0].lstrip().startswith("# "):
-                lines.pop(0)
-            content = "\n".join(lines).lstrip("\n")
-            # Prepend the canonical discourse title
-            if title:
-                content = f"# {title}\n\n{content}"
-        result.append({
-            "id": tab["id"],
-            "title": tab["title"],
-            "content": content,
-        })
-    return result
+    # Inject the canonical title into the plan object
+    if title:
+        plan_data["title"] = title
+
+    import json as _json
+    content = _json.dumps(plan_data)
+
+    return [{"id": "overview", "title": "Plan", "content": content}]
+
+
+PLAN_REFINEMENT_SYSTEM = """You are helping the user refine their plan. The current plan is shown below.
+
+Your role:
+- Have a short conversational back-and-forth (1-2 questions max) to understand exactly what they want changed.
+- Once you understand their intent well enough, generate a full proposed_plan JSON in the same structured format.
+- In your reply, briefly describe what you are changing and why, then present the proposal.
+- If you don't yet have enough clarity, reply conversationally and leave proposed_plan as null.
+
+The proposed_plan must follow this exact shape:
+{{
+  "title": "...",
+  "sections": [
+    {{"type": "tasks", "title": "Action Steps", "items": [{{"id": "t1", "text": "..."}}]}},
+    {{"type": "timeline", "title": "Timeline", "items": [{{"id": "tl1", "phase": "Week 1", "label": "..."}}]}},
+    {{"type": "watchout", "title": "Watch Out For", "items": [{{"id": "w1", "text": "..."}}]}},
+    {{"type": "questions", "title": "Open Questions", "items": [{{"id": "q1", "text": "..."}}]}}
+  ]
+}}
+
+Current plan:
+{current_plan}"""
 
 
 def generate_chat_reply(
@@ -415,7 +440,19 @@ def generate_chat_reply(
             f"IMPORTANT: If the answer matches one of the pre-defined options, use that option's EXACT text — never paraphrase it. "
             f"Do not proactively suggest sub-topics or new planning dimensions."
         )
-    if tab_context:
+    is_plan_refinement = (
+        tab_context
+        and tab_context.get("tab_id") == "overview"
+        and not aspect_context
+    )
+    if is_plan_refinement:
+        current_plan = tab_context.get("current_content", "")
+        system += "\n\n" + PLAN_REFINEMENT_SYSTEM.format(current_plan=current_plan)
+        system = system.replace(
+            '{"reply": "...", "suggested_answer": null, "suggested_answers": [], "updated_aspect": null, "updated_question": null}',
+            '{"reply": "...", "suggested_answer": null, "suggested_answers": [], "updated_aspect": null, "updated_question": null, "proposed_plan": null}'
+        )
+    elif tab_context:
         system += (
             f"\n\nThe user is discussing the \"{tab_context['tab_title']}\" section of their summary panel. "
             f"If their message is a directive to change or update that section (not just a question), "
@@ -423,7 +460,6 @@ def generate_chat_reply(
             f"provide the full updated content for that section as a plain-text string with bullet points where appropriate. "
             f"If the message is a question or clarification (not a directive), leave \"updated_tab_content\" as null."
         )
-        # Extend the JSON schema in CHAT_SYSTEM to include updated_tab_content
         system = system.replace(
             '{"reply": "...", "suggested_answer": null, "suggested_answers": [], "updated_aspect": null, "updated_question": null}',
             '{"reply": "...", "suggested_answer": null, "suggested_answers": [], "updated_aspect": null, "updated_question": null, "updated_tab_content": null}'
@@ -433,7 +469,10 @@ def generate_chat_reply(
     try:
         data = _extract_json(raw)
         updated_tab = None
-        if tab_context and data.get("updated_tab_content"):
+        proposed_plan = None
+        if is_plan_refinement and data.get("proposed_plan"):
+            proposed_plan = data["proposed_plan"]
+        elif tab_context and not is_plan_refinement and data.get("updated_tab_content"):
             updated_tab = {
                 "id": tab_context["tab_id"],
                 "title": tab_context["tab_title"],
@@ -446,9 +485,10 @@ def generate_chat_reply(
             data.get("updated_aspect"),
             data.get("updated_question"),
             updated_tab,
+            proposed_plan,
         )
     except Exception:
-        return raw, None, [], None, None, None
+        return raw, None, [], None, None, None, None
 
 
 def recontextualize_ancestors(objective: str, ancestors: list[dict], mode: str = "") -> dict:

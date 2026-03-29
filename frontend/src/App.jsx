@@ -318,7 +318,6 @@ export default function App() {
           onSessionChange={upsertSession}
           onHome={() => setView("landing")}
           initialInterviewQueue={initialInterviewQueue}
-          onContinueExploring={handleContinueExploring}
           onFinishPlanning={handleFinishPlanning}
           theme={theme}
           onThemeChange={setTheme}

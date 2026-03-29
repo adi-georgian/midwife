@@ -181,36 +181,30 @@ export default function ChatPanel({
               ▶ Resume Interview
             </button>
           )}
-          {(flatNodes.length > 0 || panelTabs) && (
+          {(flatNodes.length > 0 || (panelTabs && panelTabs[0]?.content)) && (
             <div className="chat-context-row">
-              <span className="chat-context-label">About</span>
-              {flatNodes.length > 0 && (
-                <select
-                  className="chat-context-select"
-                  value={chatContextNodeId || ""}
-                  onChange={e => onContextChange?.(e.target.value, chatContextTabId)}
-                >
-                  {flatNodes.map(n => (
-                    <option key={n.id} value={n.id}>
-                      {'\u00A0'.repeat(n.depth * 2)}{n.label}
-                    </option>
-                  ))}
-                </select>
-              )}
-              {panelTabs && panelTabs.length > 0 && (
-                <>
-                  <span className="chat-context-sep">in</span>
-                  <select
-                    className="chat-context-select"
-                    value={chatContextTabId || ""}
-                    onChange={e => onContextChange?.(chatContextNodeId, e.target.value)}
-                  >
-                    {panelTabs.map(t => (
-                      <option key={t.id} value={t.id}>{t.title}</option>
-                    ))}
-                  </select>
-                </>
-              )}
+              <span className="chat-context-label">Chatting about</span>
+              <select
+                className="chat-context-select"
+                value={chatContextNodeId === "plan" ? "plan" : (chatContextNodeId || "")}
+                onChange={e => {
+                  const val = e.target.value;
+                  if (val === "plan") {
+                    onContextChange?.("plan", "overview");
+                  } else {
+                    onContextChange?.(val, chatContextTabId);
+                  }
+                }}
+              >
+                {panelTabs && panelTabs[0]?.content && (
+                  <option value="plan">the Plan</option>
+                )}
+                {flatNodes.map(n => (
+                  <option key={n.id} value={n.id}>
+                    {'\u00A0'.repeat(n.depth * 2)}{n.label}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
           <form className="chat-input-row" onSubmit={handleSend}>
@@ -220,7 +214,7 @@ export default function ChatPanel({
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               rows={1}
-              placeholder="Ask Midwife anything… (Shift+Enter for newline)"
+              placeholder={chatContextNodeId === "plan" ? "How would you like to steer this plan?" : "Ask Midwife anything… (Shift+Enter for newline)"}
             />
             <button type="submit" title="Send">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">

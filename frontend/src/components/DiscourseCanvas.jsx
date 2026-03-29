@@ -659,7 +659,7 @@ function AutoLayout({ focusNodeId, layoutEngine, graphVersion }) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function DiscourseCanvas({ sessionId, tree, setTree, objective, discourseTitle, background = {}, onSessionChange, onHome, initialInterviewQueue = null, onInterviewCycleComplete = null, onContinueExploring = null, onFinishPlanning = null, theme = "sepia", onThemeChange, initialPanelTabs = null, initialDiscourseFinished = false }) {
+export default function DiscourseCanvas({ sessionId, tree, setTree, objective, discourseTitle, background = {}, onSessionChange, onHome, initialInterviewQueue = null, onInterviewCycleComplete = null, onFinishPlanning = null, theme = "sepia", onThemeChange, initialPanelTabs = null, initialDiscourseFinished = false }) {
   // If an initialInterviewQueue is provided (from briefing), start in interviewing phase directly
   const [phase, setPhase] = useState(() => {
     if (initialInterviewQueue && initialInterviewQueue.length > 0) return "interviewing";
@@ -701,6 +701,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
 
   const [interviewReady, setInterviewReady] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [proposedPlan, setProposedPlan] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [apiError, setApiError] = useState(null);
   useEffect(() => {
@@ -1216,6 +1217,24 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
     ));
   }
 
+  function handleRefinePlan() {
+    setChatOpen(true);
+    setChatContextNodeId("plan");
+    setChatContextTabId("overview");
+  }
+
+  function handleAcceptProposedPlan(plan) {
+    const newContent = JSON.stringify(plan);
+    const newTabs = panelTabs.map((t, i) => i === 0 ? { ...t, content: newContent } : t);
+    setPanelTabs(newTabs);
+    setProposedPlan(null);
+    onSessionChange?.({ sessionId, panelTabs: newTabs });
+  }
+
+  function handleRejectProposedPlan() {
+    setProposedPlan(null);
+  }
+
   async function handleGeneratePanel() {
     setIsPanelGenerating(true);
     setPlanStale(false);
@@ -1249,15 +1268,19 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
       ? { aspect: aspectNode.aspect, question: aspectNode.question, summary: aspectNode.summary }
       : null;
 
+    const nodeId = context?.nodeId ?? chatContextNodeId;
     const tabId = context?.tabId ?? chatContextTabId;
-    const tabContext = tabId && panelTabs
-      ? (() => { const t = panelTabs.find(t => t.id === tabId); return t ? { tab_id: t.id, tab_title: t.title } : null; })()
-      : null;
+    const isPlanContext = nodeId === "plan";
+    const tabContext = isPlanContext
+      ? { tab_id: "overview", tab_title: "Plan", current_content: panelTabs?.[0]?.content || "" }
+      : (tabId && panelTabs
+          ? (() => { const t = panelTabs.find(t => t.id === tabId); return t ? { tab_id: t.id, tab_title: t.title } : null; })()
+          : null);
 
     setIsChatWaiting(true);
     let data;
     try {
-      data = await sendChatMessage(sessionId, updatedMessages, aspectContext, tabContext);
+      data = await sendChatMessage(sessionId, updatedMessages, isPlanContext ? null : aspectContext, tabContext);
     } catch (err) {
       setApiError(err.message);
       setIsChatWaiting(false);
@@ -1280,6 +1303,11 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
       setPanelTabs(prev => prev.map(t =>
         t.id === data.updated_tab.id ? { ...t, content: data.updated_tab.content } : t
       ));
+    }
+
+    // Handle proposed plan from plan-refinement chat
+    if (data.proposed_plan) {
+      setProposedPlan(data.proposed_plan);
     }
 
     const assistantMsg = {
@@ -1671,16 +1699,13 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
       {rightPanelOpen && (
         <RightPanel
           tree={tree}
-          hoveredNodeId={hoveredNodeId}
-          selectedNodeId={selectedNodeId}
-          findNode={findNode}
-          focusNodeId={focusNodeId}
           phase={phase}
           panelTabs={panelTabs}
+          sessionId={sessionId}
           onGeneratePanel={handleGeneratePanel}
           isPanelGenerating={isPanelGenerating}
           onCollapse={() => setRightPanelOpen(false)}
-          onContinueExploring={onContinueExploring}
+          onRefinePlan={handleRefinePlan}
           onFinishPlanning={() => {
             setDiscourseFinished(true);
             onSessionChange?.({ sessionId, discourseFinished: true });
@@ -1689,6 +1714,9 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
           discourseFinished={discourseFinished}
           width={rightPanelWidth}
           onWidthChange={handleRightPanelWidthChange}
+          proposedPlan={proposedPlan}
+          onAcceptProposedPlan={handleAcceptProposedPlan}
+          onRejectProposedPlan={handleRejectProposedPlan}
         />
       )}
       </div>

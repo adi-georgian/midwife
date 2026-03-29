@@ -930,6 +930,22 @@ body.theme-dark .lpanel-focus-description {
   overflow: hidden;
 }
 
+.discourse-node__desc {
+  font-size: 0.63rem;
+  color: var(--text-3);
+  font-weight: 400;
+  font-style: italic;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+body.theme-dark .discourse-node__desc {
+  color: var(--text-2);
+}
+
 .discourse-node--dimmed {
   opacity: 0.2;
   transition: opacity 0.15s;
@@ -3806,7 +3822,7 @@ body.theme-dark .lpanel-focus-description {
 .chat-bar__panel {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 14px 14px 0 0;
+  border-radius: 14px;
   box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15);
   height: 680px;
   overflow: hidden;
@@ -3818,7 +3834,7 @@ body.theme-dark .lpanel-focus-description {
 .chat-bar__panel .chat-panel-inner {
   width: 100%;
   height: 100%;
-  border-radius: 14px 14px 0 0;
+  border-radius: 14px;
 }
 
 .chat-bar__input-row {
@@ -3930,7 +3946,7 @@ body.theme-dark .lpanel-focus-description {
 .recontexting-indicator {
   position: absolute;
   top: 12px;
-  right: 280px;
+  right: 320px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 20px;
@@ -4479,11 +4495,6 @@ body.theme-dark .lpanel-focus-description {
   white-space: nowrap;
 }
 
-.chat-context-sep {
-  font-size: 0.72rem;
-  color: var(--text-3);
-  font-family: var(--font-sans);
-}
 
 .chat-context-select {
   font-size: 0.72rem;
@@ -5211,6 +5222,261 @@ body.theme-dark .lpanel-focus-description {
 
 .rpanel-tab-content--notabs {
   /* No top border needed since there's no tab bar above it */
+}
+
+/* --- Interactive Plan --- */
+
+.iplan {
+  padding: 16px 16px 8px;
+  font-family: var(--font-sans);
+}
+
+.iplan--muted {
+  opacity: 0.85;
+}
+
+.iplan-title {
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--blue-badge);
+  margin: 0 0 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.iplan-section {
+  margin-bottom: 20px;
+}
+
+.iplan-section-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 8px;
+}
+
+/* Tasks */
+.iplan-task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.iplan-task-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.iplan-checkbox {
+  margin-top: 2px;
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--blue-badge);
+  cursor: pointer;
+}
+
+.iplan-task-label {
+  font-size: 0.82rem;
+  color: var(--text-1);
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.iplan-task-item--done .iplan-task-label {
+  text-decoration: line-through;
+  color: var(--text-3);
+}
+
+/* Timeline */
+.iplan-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-left: 4px;
+}
+
+.iplan-timeline-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 36px;
+}
+
+.iplan-timeline-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: 16px;
+}
+
+.iplan-timeline-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--blue-badge);
+  background: var(--surface);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+  margin-top: 2px;
+}
+
+.iplan-timeline-dot:hover {
+  background: var(--blue-badge);
+  opacity: 0.5;
+}
+
+.iplan-timeline-dot--done {
+  background: var(--blue-badge);
+  border-color: var(--blue-badge);
+}
+
+.iplan-timeline-line {
+  width: 2px;
+  flex: 1;
+  min-height: 18px;
+  background: var(--border);
+  margin: 3px 0;
+}
+
+.iplan-timeline-right {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 14px;
+}
+
+.iplan-timeline-phase {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--blue-badge);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
+.iplan-timeline-label {
+  font-size: 0.82rem;
+  color: var(--text-1);
+  line-height: 1.4;
+  margin-top: 1px;
+}
+
+.iplan-timeline-label--done {
+  text-decoration: line-through;
+  color: var(--text-3);
+}
+
+/* Watch Out For */
+.iplan-watchout {
+  background: rgba(217, 119, 6, 0.07);
+  border-left: 3px solid #d97706;
+  border-radius: 0 6px 6px 0;
+  padding: 10px 12px;
+}
+
+body.theme-dark .iplan-watchout {
+  background: rgba(217, 119, 6, 0.12);
+}
+
+.iplan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.iplan-list-item {
+  font-size: 0.82rem;
+  color: var(--text-2);
+  line-height: 1.4;
+  padding-left: 12px;
+  position: relative;
+}
+
+.iplan-list-item::before {
+  content: "·";
+  position: absolute;
+  left: 2px;
+  color: var(--text-3);
+}
+
+.iplan-questions .iplan-list-item::before {
+  content: "?";
+  font-weight: 700;
+  color: var(--blue-badge);
+  opacity: 0.6;
+  font-size: 0.7rem;
+}
+
+/* Proposed Plan Preview */
+.iplan-proposed-wrap {
+  border: 1.5px solid var(--blue-badge);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.iplan-proposed-header {
+  background: var(--blue-badge);
+  color: white;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+}
+
+.iplan-proposed-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-alt);
+}
+
+.iplan-accept-btn {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  font-family: inherit;
+  font-weight: 600;
+  background: var(--blue-badge);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.iplan-accept-btn:hover {
+  opacity: 0.88;
+}
+
+.iplan-reject-btn {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  font-family: inherit;
+  background: none;
+  color: var(--text-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.iplan-reject-btn:hover {
+  border-color: var(--border-hover);
+  color: var(--text-1);
 }
 
 
