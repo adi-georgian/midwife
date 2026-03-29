@@ -4,7 +4,7 @@
 %%
 %% Compile with: pdflatex midwife && bibtex midwife && pdflatex midwife && pdflatex midwife
 %%
-\documentclass[sigconf,authordraft]{acmart}
+\documentclass[sigconf]{acmart}
 
 %% ── Metadata ──────────────────────────────────────────────────────────────────
 \setcopyright{none}
@@ -33,20 +33,6 @@
 
 %% ── Abstract ──────────────────────────────────────────────────────────────────
 \begin{abstract}
-%%
-%% TARGET: ~150 words.
-%%
-%% Cover all four beats in order:
-%%   (1) The problem: LLM chat interfaces are one-dimensional; they cannot
-%%       represent the branching, multi-dimensional structure of real planning.
-%%   (2) The approach: MidWife models planning as a Socratic discourse tree —
-%%       a hierarchical structure of Aspects (clarifying questions) that the user
-%%       navigates and answers in partnership with an LLM.
-%%   (3) Key features worth naming: 9 planning modes, per-node chat assistant,
-%%       ghost-node prefetching, ancestor recontextualization, synthesis panel.
-%%   (4) Contribution: a working prototype + design insights toward AI as a
-%%       Socratic thinking partner in structured planning interfaces.
-%%
 Large Language Models (LLMs) have enabled users to engage in planning, reasoning
 and sensemaking with a ``thought partner'' of sorts, allowing open-ended discussions
 on nuanced subjects. This mirrors the idea of a \textit{Socratic interlocutor}
@@ -55,7 +41,10 @@ out new ideas, and even find holes in their planning. However, most LLM platform
 are limited to one-dimensional chat interfaces that cannot adjust to the scope of a
 dynamic, ever-growing discourse, thereby limiting the ability of a user to build a
 map of their thinking. This reflects an inherent limitation in the affordances offered
-by a linear conversational interface. We present \textbf{\textit{midWife}}: an interactive
+by a linear conversational interface. We present \textbf{\textit{midWife}}\footnote{The name is a direct tribute to the Socratic metaphor of
+\textit{maieutics}~\cite{plato_theaetetus}: just as midwives assist in giving birth
+to children, he described his Socratic method as helping others give birth to wisdom and
+ideas. midWife plays the same role.}: an interactive
 system that encourages thinking by iteratively soliciting the user's intent, objective
 and/or nascent thoughts, probing with revelatory questions to concretize
 user-indicated notions, and visualizing this discourse as a map of thinking in the
@@ -123,43 +112,6 @@ ask questions, request changes, and steer the Plan toward their focus areas.
 %% ═══════════════════════════════════════════════════════════════════════════════
 \section{Introduction}
 %% ═══════════════════════════════════════════════════════════════════════════════
-%%
-%% TARGET: ~400 words / ~0.65 column.
-%%
-%% Paragraph 1 — The problem (2–3 sentences)
-%%   LLMs are increasingly used for complex, multi-dimensional thinking tasks —
-%%   planning an event, making a career decision, working through a design problem.
-%%   Yet every major LLM interface is a flat, scrollable chat thread: a single
-%%   linear sequence that cannot represent the branching structure of real
-%%   deliberation. Breadth is sacrificed for conversational flow.
-%%
-%% Paragraph 2 — The insight (2–3 sentences)
-%%   The Socratic Method externalises thinking via structured questioning that
-%%   surfaces hidden assumptions and maps the space of a problem before committing
-%%   to answers [Kunz 1970, Toulmin 1958, Rittel 1973]. Applied to HCI, this
-%%   lineage produced argument mapping tools (IBIS, Compendium) and, more recently,
-%%   AI-powered dialectical systems [Tanprasert 2024, Chiang 2024]. These remain
-%%   either structurally flat or AI-passive. What is missing is a system that
-%%   combines spatial discourse structure with AI-as-Socratic-interlocutor.
-%%
-%% Paragraph 3 — What MidWife does (3–4 sentences)
-%%   MidWife is a web application where users state a planning objective and select
-%%   a planning mode. An LLM generates a set of Aspects — targeted Socratic
-%%   questions — which form the root of a discourse tree. Users answer each
-%%   Aspect; answering triggers elaboration into child Aspects. A per-node chat
-%%   assistant guides the user toward a concrete answer. After exploring the tree,
-%%   a synthesis panel distils the discourse into structured, actionable output.
-%%
-%% Paragraph 4 — Contributions (use \begin{itemize})
-%%   \item The MidWife system: a working prototype of LLM-powered Socratic
-%%         planning via interactive discourse trees.
-%%   \item A mode-aware questioning engine supporting 9 distinct planning contexts,
-%%         each modulating the AI's questioning strategy.
-%%   \item A mixed-initiative interaction model in which user and AI jointly
-%%         construct and refine the discourse tree.
-%%   \item Design insights from building and iterating on the prototype, including
-%%         a proposed evaluation plan for future work.
-%%
 Planning complex, multi-dimensional tasks is an increasingly common yet poorly
 supported use case for large language models. Whether deciding how to change careers,
 organizing a major event, or working through a research hypothesis, users routinely
@@ -188,9 +140,7 @@ is a single system that combines \textit{spatial discourse structure} with
 \textit{AI-as-Socratic-interlocutor} --- one where questioning drives the growth of
 a persistent, navigable tree of thinking.
 
-We present \textbf{midWife}\footnote{The name is a direct tribute to the Socratic
-metaphor: an AI interlocutor that helps users bring their plans and ideas into being,
-much as Socrates helped his interlocutors give birth to wisdom.}: an interactive
+We present \textbf{midWife}: an interactive
 web application for open-ended planning via Socratic dialogue. Users state a planning
 objective and optionally select a \textit{mode} (logistics, brainstorming, creative,
 decision, research, and more). midWife responds with a set of \textit{Aspects} ---
@@ -245,44 +195,21 @@ This paper makes the following contributions:
 A wave of systems published at UIST and CHI since 2022 have directly addressed the
 limitation of linear chatbot interfaces for complex information work. Sensecape~\cite{suh2023sensecape}
 provides an infinite canvas where users interact with an LLM through multilevel
-abstraction, moving fluidly between information foraging and sensemaking loops; a
-within-subjects study found users explored significantly more topics and structured
-knowledge more effectively than with a ChatGPT-plus-canvas baseline. Selenite~\cite{liu2024selenite}
-solves the ``cold-start'' problem in unfamiliar decision domains by generating
-structured overviews of options and criteria upfront, dynamically contextualizing
-new information within those structures and accelerating information processing by
-36\% across three studies. Luminate~\cite{suh2024luminate} prevents premature
-convergence by first extracting key dimensions from a prompt, then generating
-responses that span the resulting design space; a study with 14 professional writers
-showed substantially increased divergent thinking. Graphologue~\cite{jiang2023graphologue}
-converts LLM responses into interactive node-link diagrams in real time, demonstrating
-that graphical, non-linear dialogue improves information parsing and exploration.
-Synergi~\cite{kang2023synergi} exemplifies mixed-initiative scholarly sensemaking:
-user-highlighted text seeds AI-generated hierarchical research threads grounded in
-citation context. Most closely aligned is the Human-AI Deliberation system of Ma et
-al.~\cite{ma2025deliberation}, which engages users in dimension-level opinion exchange
-and iterative discussion rather than presenting static recommendations --- outperforming
-traditional explainable AI in fostering appropriate reliance.
+abstraction, moving fluidly between information foraging and sensemaking loops.
+Selenite~\cite{liu2024selenite} solves the ``cold-start'' problem in unfamiliar
+decision domains by generating structured overviews of options and criteria upfront.
+Luminate~\cite{suh2024luminate} prevents premature convergence by generating responses
+that span a prompt's full design space. Graphologue~\cite{jiang2023graphologue} converts
+LLM responses into interactive node-link diagrams in real time. Most closely aligned
+is Human-AI Deliberation~\cite{ma2025deliberation}, which engages users in
+dimension-level opinion exchange and iterative discussion rather than static
+recommendations. Commercially, tools such as Whimsical AI and Miro AI take a simpler
+approach: a single prompt generates a complete mind-map, leaving the user as a passive
+recipient rather than a co-constructor.
 
-Beyond the academic literature, a growing class of commercial mind-mapping and planning
-tools has begun integrating LLMs in this space. Tools such as Whimsical AI, Miro AI,
-and various Notion-based workflows typically offer one of two interaction patterns:
-(i)~the user provides a short prompt or intent and the tool generates a complete mind-map
-or document in a single shot; or (ii)~the user uploads an existing artefact --- a PDF,
-transcript, or note --- and the tool extracts a structured map from it. Neither pattern
-is interactive in the deliberative sense. In the first, the AI does all the thinking and
-the user is a passive recipient; in the second, the AI merely reorganises existing
-material. In both cases, the user's agency is limited to accepting, rejecting, or lightly
-editing the AI's output. The co-creative, back-and-forth quality of genuine planning ---
-the iterative questioning, the gradual crystallization of vague intent into concrete
-decisions --- is absent. As a consequence, users report lower sense of ownership over
-the produced artefact. midWife's design is explicitly a response to this pattern: its
-core invariant is that \textit{the AI never makes decisions on the user's behalf}.
-
-A common thread across both academic systems and commercial tools is that AI produces
-\textit{content}: information, structure, synthesis. It organises and generates; it does
-not interrogate. midWife's core departure is that its primary AI role is to
-\textit{ask}, not to tell.
+A common thread across these systems is that AI produces \textit{content}: information,
+structure, synthesis. It organises and generates; it does not interrogate. midWife's
+core departure is that its primary AI role is to \textit{ask}, not to tell.
 
 %% ── 2.2 ───────────────────────────────────────────────────────────────────────
 \subsection{Socratic and Dialectical AI Interaction}
@@ -300,28 +227,18 @@ not interrogate. midWife's core departure is that its primary AI role is to
 %% representation of the evolving discourse. MidWife embeds Socratic interaction
 %% inside a structured discourse tree.
 %%
-Tanprasert et al.~\cite{tanprasert2024debate} demonstrated in a landmark CHI 2024 Best
-Paper that LLM-powered debate chatbots with outgroup identity and persuasive rhetoric
-most effectively induced critical thinking --- interpretation, analysis, and
-self-regulation --- in users engaging with online video content. Chiang et
-al.~\cite{chiang2024devilsadvocate} showed that interactive devil's advocate agents
-that challenge AI recommendations improved appropriate reliance and decision accuracy
-by catalyzing extended discussion. Lim et al.~\cite{lim2026iffyornot} combined fallacy
-detection with Socratic questioning in a browser extension, reporting that it encourages
-attentiveness and poses thought-provoking questions in evaluation of potential
-misinformation. At the model level, SocraticLM~\cite{liu2024socraticlm} fine-tunes
-LLMs for Socratic teaching through a multi-agent pipeline, producing a dataset of 35K
-Socratic dialogues --- validating that LLMs can reliably ask guiding questions rather
-than give answers at scale. Chang~\cite{chang2023socratic} engineers ten Socratic
-strategies from Plato's dialogues (elenchus, maieutics, dialectic, counterfactual
-reasoning) into prompt templates, demonstrating improved output correctness and more
-critically examined responses. Lee et al.~\cite{lee2025criticalthinking} provide an
-empirical motivation for midWife's design: surveying 319 knowledge workers, they find
-higher AI confidence correlates with \textit{less} critical engagement by users ---
-underscoring the need for AI systems that provoke thought rather than satisfy it.
-Collins et al.~\cite{collins2024thoughtpartners} frame the aspirational target as AI
-``thought partners'': reasonable, insightful, trustworthy collaborators that think
-\textit{with} humans.
+Tanprasert et al.~\cite{tanprasert2024debate} demonstrated that LLM-powered debate
+chatbots most effectively induced critical thinking in users engaging with online video
+content. Chiang et al.~\cite{chiang2024devilsadvocate} showed that interactive
+devil's advocate agents improved appropriate reliance and decision accuracy by
+catalyzing extended discussion. At the model level, work on Socratic prompt
+engineering~\cite{chang2023socratic} and fine-tuned Socratic models~\cite{liu2024socraticlm}
+validates that LLMs can reliably ask guiding questions rather than give answers.
+Lee et al.~\cite{lee2025criticalthinking} provide an empirical motivation for
+midWife's design: higher AI confidence correlates with \textit{less} critical
+engagement --- underscoring the need for AI systems that provoke thought rather than
+satisfy it. Collins et al.~\cite{collins2024thoughtpartners} frame the aspirational
+target as AI ``thought partners'' that think \textit{with} humans.
 
 A shared limitation across this stream is structural: these systems operate within
 flat, linear chat interfaces. The dialogue may be dialectical, but the representation
@@ -348,35 +265,19 @@ and build upon.
 %% MidWife synthesises all three threads.
 %%
 The intellectual lineage of structured discourse tools begins with Kunz and Rittel's
-IBIS~\cite{kunz1970ibis}, which defined a grammar for structuring complex policy
-deliberation around Issues (questions), Positions (answers), and Arguments (pros/cons).
-Rittel and Webber's complementary ``wicked problems'' work~\cite{rittel1973wicked}
-established why such structure is necessary: ill-structured problems demand argumentative,
-deliberative processes rather than algorithmic resolution. Toulmin's argument
-model~\cite{toulmin1958argument} contributed a richer grammar (claim, grounds, warrant,
-backing, qualifier, rebuttal) that underpins virtually all subsequent computational
-argumentation work. Conklin and Begeman's gIBIS~\cite{conklin1988gibis} realized IBIS
-graphically, demonstrating that typed structure eliminates unconstructive conversational
-moves; Compendium extended this into a professional dialogue-mapping practice.
-MacLean et al.'s QOC notation~\cite{maclean1991qoc} showed a structurally isomorphic
-pattern (Questions, Options, Criteria) for design rationale, confirming the generality
-of branching deliberation structures. Cognitive grounding comes from Russell et al.'s
-sensemaking cost model~\cite{russell1993sensemaking} and Pirolli and Card's dual-loop
-foraging-sensemaking framework~\cite{pirolli2005sensemaking}: explicit tree representations
-reduce the cognitive cost of organizing complex thought by externalising working memory.
-
-Recent work has begun augmenting this lineage with LLMs. VISAR~\cite{zhang2023visar}
-supports argumentative writing through hierarchical goal brainstorming and LLM-powered
-``argumentation sparks'' (counterarguments, evidence, logical weakness detection) within
-a tree-structured outline. AMQuestioner~\cite{pan2025amquestioner} automatically extracts
-argument maps from online discussions and presents Socratic questions to guide users in
-critically exploring claims; a study of 24 participants showed improved critical thinking
-skills and open-mindedness. Wang et al.~\cite{wang2025nodetree} provide direct empirical
-support for midWife's design choice: node-tree interfaces outperformed chatbots specifically
-on \textit{decision-making} and \textit{brainstorming} tasks, with 90\% of node-tree users
-finding the interface easy to navigate. Horvitz's mixed-initiative
-principles~\cite{horvitz1999mixedinitiative} supply the interaction design framework for
-managing when the AI should take initiative versus deferring to the user.
+IBIS~\cite{kunz1970ibis}, which defined a grammar for structuring deliberation around
+Issues, Positions, and Arguments, motivated by the observation that ill-structured
+``wicked problems''~\cite{rittel1973wicked} demand argumentative processes rather than
+algorithmic resolution. Recent work has begun augmenting this lineage with LLMs.
+VISAR~\cite{zhang2023visar} supports argumentative writing through hierarchical goal
+brainstorming and LLM-powered argumentation sparks within a tree-structured outline.
+AMQuestioner~\cite{pan2025amquestioner} presents Socratic questions over automatically
+extracted argument maps to guide critical exploration of online claims. Wang et
+al.~\cite{wang2025nodetree} provide direct empirical support for midWife's design
+choice: node-tree interfaces outperformed chatbots on decision-making and brainstorming
+tasks. Horvitz's mixed-initiative principles~\cite{horvitz1999mixedinitiative} supply
+the interaction design framework for managing when the AI should take initiative versus
+deferring to the user.
 
 Despite this progress, these systems use AI primarily for \textit{content generation}:
 surfacing counterarguments, labelling argument types, retrieving evidence. None positions
@@ -384,16 +285,6 @@ the AI as a \textit{Socratic facilitator} whose primary goal is to help the user
 more deeply through structured questioning.
 
 %% ── 2.4 Positioning ───────────────────────────────────────────────────────────
-%%
-%% Write 3–4 sentences (or a small table) making the gap explicit:
-%% Three streams are active, but no current system integrates:
-%%   (1) Spatial/hierarchical discourse structure
-%%   (2) AI as Socratic interlocutor (questioner, not answer machine)
-%%   (3) Mode-aware questioning across diverse planning contexts
-%% Consider a 3-column comparison table:
-%%   System | Spatial structure | Socratic AI | Mode-aware
-%% Then one sentence: "MidWife's contribution is the synthesis of these three."
-%%
 The three threads described above are active and productive, yet no existing system
 integrates all three. Table~\ref{tab:positioning} characterizes the landscape.
 Sensemaking tools provide spatial or hierarchical structure but the AI generates
@@ -437,16 +328,11 @@ AMQuestioner \cite{pan2025amquestioner}          & \checkmark & $\sim$     & $\t
 \subsection{Motivating Scenario}
 
 Consider Priya, a software engineer contemplating a move abroad for a new career
-opportunity. She opens a chat assistant and types her situation --- and immediately
-faces the core problem: a good answer requires exploring dozens of interconnected
-dimensions. What is her financial runway? Does she have the right visa? What happens
-to her current apartment and social network? What are her priorities --- career growth,
-lifestyle, proximity to family? A linear chat thread surfaces some of these concerns,
-but has no way to hold them simultaneously. Exploring one thread buries earlier ones.
-A good follow-up about housing arrives twenty messages after the topic was first raised;
-the context is effectively stale. Worse, when Priya wants to take a quick tangent ---
-say, a digression about her lease terms --- she cannot do so without polluting the
-shared context and derailing the main thread.
+opportunity. She opens a traditional chat assistant and types her situation. The
+assistant replies with a few high-level considerations --- finances, visa, lifestyle
+--- but the exchange is flat: each message buries the last, tangents derail the main
+thread, and after twenty exchanges Priya has no spatial sense of what she has covered
+or what remains open.
 
 With midWife, Priya types: ``I'm thinking of moving to Berlin for a job opportunity''
 and selects the \textit{Decision} mode. midWife generates five Aspects: \textit{Finances},
@@ -495,19 +381,13 @@ of open questions, a recommendation summary, and actionable next steps. Priya di
 %%     to, continue, and eventually synthesise. (Motivated by: Fuse [Kuznetsov
 %%     2022], Distributed Cognition [Hutchins 1995].)
 %%
-\textbf{D1 --- Visualize Discourse as a Dynamic Map of Thinking.}
-A linear chat transcript cannot externalize the structure of multi-dimensional thinking.
-Our first goal was to find a better \textit{medium}: one in which the growing discourse
-is visible as a spatial artefact the user can navigate. Given the user's planning
-objective, midWife polls the LLM for the five or six most pertinent \textit{Aspects}
-worth exploring. Each becomes a node in a radial graph, with the user's Thesis (their
-original intent or objective) at the centre and Aspects as immediate children. As the
-user answers questions and elaborates branches, the tree grows outward, accumulating
-a visual record of what has been considered, decided, and left open. A Navigator Pane
-on the left of the interface allows users to add, edit, move, and delete nodes at any
-time, ensuring the map remains theirs to shape.
+\textbf{D1. Visualize Discourse as a Dynamic Map of Thinking.}
+A linear chat transcript cannot externalise the structure of multi-dimensional thinking.
+The interface should render the growing discourse as a spatial, navigable artefact ---
+one that accumulates a visible record of what has been considered, decided, and left
+open, and that remains editable by the user throughout.
 
-\textbf{D2 --- Probe, Rather Than Answer, on the User's Behalf.}
+\textbf{D2. Probe, Rather Than Answer, on the User's Behalf.}
 Many contemporary mind-mapping and planning tools offload the thinking away from the
 user entirely: the user provides an initial intent and is presented with a complete
 plan, map, or document generated by the AI. While efficient, this pattern significantly
@@ -516,12 +396,9 @@ final outcome does not carry their fingerprint. We take a fundamentally differen
 approach. midWife uses the LLM exclusively to: (i)~ask probing questions; (ii)~uncover
 hidden assumptions; (iii)~help the user verbalize inchoate ideas through focused
 follow-ups; and (iv)~offer concrete suggestions only when the user is navigating an
-unfamiliar domain. The \textit{onus} of deciding, committing, and directing always
-rests with the user. This design choice is testable: we expect users to report higher
-agency, ownership, and satisfaction with the output than users of single-shot generation
-tools --- a hypothesis for future evaluation.
+unfamiliar domain. The \textit{onus} of deciding, committing, and directing always rests with the user.
 
-\textbf{D3 --- Model Thinking as a Mixed-Initiative Dialogue.}
+\textbf{D3. Model Thinking as a Mixed-Initiative Dialogue.}
 Effective deliberation is neither fully user-driven nor fully AI-driven; it is a
 back-and-forth in which each party contributes what the other cannot easily do alone.
 We therefore designed midWife so that \textit{every significant action} can be initiated
@@ -535,32 +412,13 @@ system should scope its initiative to the user's current context, offer safety n
 (e.g. editable suggestions), and time AI interventions to moments when the user is
 most likely to benefit from them.
 
+\textbf{D4. Treat the Discourse as a Persistent Artefact.}
+A planning session should not vanish when the browser closes. The Discourse tree and
+its synthesised Plan should be resumable, allowing users to return to, continue, and
+revise their thinking over time rather than starting from scratch each session.
+
 %% ── 3.3 ───────────────────────────────────────────────────────────────────────
 \subsection{The Discourse Tree Model}
-%%
-%% Describe the data model concisely (this is architecture, not implementation).
-%%
-%%   Root node: the user's planning objective (the "thesis").
-%%   Aspect nodes: each has an aspect label (≤3 words), a Socratic question,
-%%     3–5 pre-generated answer suggestions, and an optional free-text answer.
-%%   Children: generated on elaboration, scoped to the parent's domain.
-%%   Tree construction: answering an Aspect unlocks elaboration; elaboration
-%%     generates child Aspects whose questions are conditioned on the full
-%%     ancestry path (context_path injection).
-%%
-%%   Two special node states worth explaining:
-%%     Ghost nodes: children pre-fetched in the background after an answer is
-%%       submitted, hidden until the user elaborates. Reduces perceived latency.
-%%     Recontextualization: as a branch grows, ancestor labels may become
-%%       misleading relative to their children's actual content. The system
-%%       periodically checks and proposes updated labels.
-%%
-%%   Connect to theory:
-%%     AspectNode maps to IBIS Issues [Kunz 1970] and Toulmin's claim/grounds
-%%     [Toulmin 1958]. The context_path injection mirrors the sensemaking loop's
-%%     representation-refinement cycle [Russell 1993, Pirolli 2005].
-%%
-
 Each session in midWife is called a \textbf{\textit{Discourse}} --- a structured
 planning session centred around a \textbf{\textit{Thesis}}: the user's objective,
 intent, topic of interest, or open question. Before the Discourse begins, the user
@@ -589,13 +447,11 @@ content and proposes updated labels, keeping the map legible as the discourse gr
 \subsection{User Interface \& Features}
 
 After the user submits their Thesis and Mode of Help, the interface transitions to the
-main Discourse page, which consists of three primary areas: (i)~the \textbf{Navigator
-Pane} on the left, showing a structured list of all \textit{Aspects} in the current
-Discourse, allowing users to add, edit, move, and delete nodes at any time; (ii)~the
-\textbf{Discourse Canvas} at the centre, a node-link diagram rendering the Thesis and
-its Aspect nodes radially, updated in real time as the Discourse grows; and (iii)~the
-\textbf{Plan Pane} on the right, displaying a rich Markdown summary of action items,
-timelines, and open questions synthesised from the current state of the Discourse.
+main Discourse page, consisting of three panels: (i)~the \textbf{Navigator Pane} on
+the left, a structured list of all Aspects and the primary surface for manual tree
+editing; (ii)~the \textbf{Discourse Canvas} at the centre, a node-link diagram updated
+in real time as the Discourse grows; and (iii)~the \textbf{Plan Pane} on the right,
+a synthesised Markdown document derived from the current Discourse state.
 
 \subsubsection{Interview \& Answering}
 
@@ -654,39 +510,11 @@ by the AI.
 
 %% ── 3.5 ───────────────────────────────────────────────────────────────────────
 \subsection{Mixed-Initiative Interaction}
-%%
-%% Frame around Horvitz [1999] principles.
-%%
-%% AI-led actions (when the system takes initiative):
-%%   - Generates initial Aspects on session creation
-%%   - Pre-generates suggestion chips (answer options) per node
-%%   - Prefetches ghost children after an answer is submitted
-%%   - Proposes ancestor re-labels via recontextualization
-%%   - Synthesises the full tree into a structured summary panel on demand
-%%
-%% User-led actions (user takes initiative):
-%%   - Answers via suggestions or free text
-%%   - Selects which branches to elaborate
-%%   - Manually adds, moves, deletes, and relabels nodes
-%%   - Opens per-node chat to work through a hard question conversationally
-%%   - Edits the synthesis panel via natural language directives
-%%
-%% Per-node chat is a key design decision worth elaborating:
-%%   The chat assistant is scoped to a single node's context (aspect + question
-%%   + full ancestry path + existing answers). It guides the user toward ONE
-%%   concrete answer. It can surface new Aspects if the user raises genuinely
-%%   new concerns. It can reframe the question if it doesn't fit the user.
-%%   This scoping prevents context bleed and keeps the conversation focused —
-%%   a deliberate departure from global chatbots.
-%%
+
 midWife distributes initiative between user and AI across every layer of the
-interaction. On the AI side: the system generates the initial set of Aspects on
-session creation; pre-generates suggestion chips for each node; proposes ancestor relabelling via
-recontextualization; and synthesises the full discourse into the Plan Pane on demand.
-On the user side: the user answers via chips or free text; selects which branches to
-elaborate; manually adds, moves, deletes, and relabels nodes via the Navigator Pane;
-opens the per-node chat for any question they find difficult; and edits the Plan Pane
-via natural language directives in the chat interface.
+interaction~\cite{horvitz1999mixedinitiative}. The AI generates Aspects, pre-fills
+suggestion chips, proposes recontextualization labels, and synthesises the Plan; the
+user answers, elaborates, manually edits the tree, and steers the Plan via chat.
 
 A key design decision is scoping the chat assistant to individual nodes rather than
 providing a single global chatbot. Each chat session is initialised with the full
@@ -703,33 +531,6 @@ the discourse tree rather than replacing it.
 %% ═══════════════════════════════════════════════════════════════════════════════
 \section{Implementation}
 %% ═══════════════════════════════════════════════════════════════════════════════
-%%
-%% TARGET: ~1 column + 2 figures.
-%%
-%% Focus: implementation decisions that directly shaped the UX — not infra/ops details.
-%%
-%% Stack (brief): React + Vite + ReactFlow + Dagre (frontend), FastAPI (backend).
-%%   ReactFlow: gives us free pan/zoom/select on the canvas; Dagre handles
-%%   automatic tree layout so nodes never overlap as the tree grows.
-%%   Session state stored in browser localStorage → resumable sessions without login.
-%%
-%% AI model choice and its UX implications:
-%%   Claude Haiku 4.5 primary: low latency keeps the interview feel responsive;
-%%   structured JSON output means aspect labels, questions, and chips arrive in one
-%%   round-trip with no post-processing delay visible to the user.
-%%   Gemini fallback chain: keeps the system available under rate limits without
-%%   the user seeing an error — graceful degradation rather than a broken state.
-%%
-%% Prompt engineering decisions with UX consequences:
-%%   - covered_aspects deduplication: existing tree labels injected as "do not
-%%     repeat" context → user never sees a duplicate or near-duplicate node appear.
-%%   - context_path injection: full ancestry injected per elaboration call →
-%%     questions grow progressively more specific as the tree deepens, which users
-%%     perceive as the system "understanding" where they are in their thinking.
-%%   - Mode-specific system prompts: each of the 9 modes swaps in a different
-%%     questioning persona and output schema (e.g. Research mode produces
-%%     hypothesis/evidence/gap Aspects; Reflect mode produces more introspective
-%%     questions) — the same interaction model feels meaningfully different per context.
 
 \begin{figure}[h]
   \centering
@@ -785,16 +586,6 @@ the discourse tree rather than replacing it.
   \label{fig:usage}
 \end{figure}
 
-%%
-%% After the figures, write 2–3 short paragraphs:
-%%   Para 1: session management (UUID sessions, localStorage sync, up to 20
-%%           resumable sessions, no server-side persistence required)
-%%   Para 2: tree layout (ReactFlow + Dagre; left/right children based on edge
-%%           sourceHandle; constants for ranksep/nodesep tuned for readability)
-%%   Para 3: any noteworthy engineering decisions (e.g. the generate_aspects
-%%           endpoint that lets users manually specify an aspect label and have
-%%           the AI generate the Socratic question for it)
-%%
 midWife is built on a React + Vite frontend and a FastAPI backend (Figure~\ref{fig:architecture}).
 The discourse canvas is implemented with ReactFlow, which provides native pan, zoom, and
 node-selection at no interaction cost to the user. Tree layout is handled by Dagre, which
@@ -807,23 +598,14 @@ remains readable without manual rearrangement.
 The AI pipeline uses Claude Haiku 4.5 as the primary model, chosen for its low latency
 and reliable structured-JSON output --- all Aspect labels, Socratic questions, and
 suggestion chips arrive in a single round-trip, keeping the interview feel responsive.
-A cascading Gemini fallback (2.0 Flash $\to$ 2.5 Flash $\to$ 3.1 Flash-lite) provides
-graceful degradation under rate limits, transparent to the user. Three prompt engineering
-decisions directly shape the interaction quality. First, \textit{covered\_aspects
-deduplication}: all existing node labels are injected into each generation call as a
-``do not repeat'' constraint, so users never encounter a duplicate or near-duplicate
-Aspect as the tree grows. Second, \textit{context\_path injection}: the full ancestry
-of label--question--answer triples is included in every elaboration prompt, causing
-questions to grow progressively more specific with depth --- an effect users perceive
-as the system tracking where they are in their thinking. Third, \textit{mode-specific
-system prompts}: each of the nine planning modes installs a different questioning
-persona and Aspect taxonomy (e.g.\ Research mode produces hypothesis, evidence, and
-gap Aspects; Reflect mode produces introspective, first-person questions), so the same
-tree interaction model feels meaningfully different across planning contexts. Finally,
-when a user manually adds a node by specifying only a label, the backend's
-\texttt{generate\_aspects} endpoint synthesises a Socratic question from that label and
-its ancestry context, ensuring user-authored nodes are indistinguishable from
-AI-generated ones in the interview flow.
+A cascading fallback to Gemini models provides graceful degradation under rate limits,
+transparent to the user. Three prompt engineering decisions directly shape interaction quality: existing node
+labels are injected as a ``do not repeat'' constraint to prevent duplicate Aspects;
+the full ancestry is included in every elaboration call, causing questions to deepen
+with the tree; and each planning mode installs a distinct questioning persona, making
+the same interaction model feel meaningfully different across contexts. When a user
+manually adds a node by label only, the system synthesises a matching Socratic
+question from its ancestry, keeping user-authored nodes consistent with AI-generated ones.
 
 
 %% ═══════════════════════════════════════════════════════════════════════════════
@@ -834,50 +616,45 @@ AI-generated ones in the interview flow.
 
 %% ── 5.1 ───────────────────────────────────────────────────────────────────────
 \subsection{Design Insights}
-%%
-%% Reflect on non-obvious things you learned building this. Suggested points:
-%%
-%%   Mode-awareness emerged from necessity: early testing showed that a
-%%   single prompt style produced planning-flavoured questions even for
-%%   reflection tasks. The 9-mode system was a direct response.
-%%
-%%   Ghost nodes as UX trade-off: prefetching makes elaboration feel instant,
-%%   but ghost nodes are invisible to users, which creates a discoverability
-%%   problem. The reveal interaction solves latency but obscures the AI's work.
-%%
-%%   Recontextualization is underused: the system can dynamically re-label
-%%   ancestors as discourse deepens, but users rarely notice. This feature
-%%   needs an affordance to surface proposed relabelings.
-%%
-%%   Per-node chat vs. global chat: anchoring the chat to a specific node's
-%%   context was the single most important design decision for keeping
-%%   conversations focused. A global chatbot would lose the discourse structure.
-%%
-%%   The synthesis panel as goal: users often don't know what "done" looks like
-%%   in an open-ended planning session. The panel provides a concrete endpoint.
-%%
-TODO: Write design insights.
+Building midWife surfaced several non-obvious design lessons. \textbf{Mode-awareness
+emerged from necessity}: early prototyping revealed that a single prompt style produced
+planning-flavoured questions even for reflection and goal-setting tasks. Users asking
+``what do I want from my career?'' were met with budget and timeline questions. The
+nine-mode system was a direct response, and the difference in question quality was
+immediately perceptible.
+
+\textbf{Per-node chat scoping} proved to be the most consequential single design
+decision. Early iterations offered a global chat sidebar, but users may quickly drift away from
+specific Aspects into open-ended conversation, causing the discourse tree to stall. Anchoring each chat session to one node --- and giving it one directive ---
+kept the conversation in service of the tree rather than replacing it.
+
+\textbf{The Plan Pane functions as a goal state.} In open-ended planning sessions,
+users may not know what ``finished'' looks like. Observing the Plan populate
+incrementally may give users a concrete sense of progress and a natural stopping
+condition, in a way that a growing tree alone does not. The panel effectively reframes
+the tree-building activity as working toward a deliverable. However, auto-refreshing the
+Plan on every answered question introduces a potential tension: users who have grown
+attached to a particular phrasing may find subsequent refreshes disorienting. Keeping the
+plan current and keeping it stable pull in opposite directions --- a trade-off without
+a clean resolution.
+
+\textbf{Recontextualization is difficult to surface.} The system re-evaluates ancestor
+labels as branches deepen, but users may not notice proposed relabellings without a stronger affordance drawing
+attention to them. This feature has real value --- a node
+labelled ``Budget'' at depth one may warrant a narrower label once its subtree reveals
+it is really about venue costs --- but surfacing it unobtrusively remains an open
+design problem.
 
 %% ── 5.2 ───────────────────────────────────────────────────────────────────────
 \subsection{Limitations}
-%%
-%%   No user study: the current work is a design-and-build contribution.
-%%   (This is consistent with the course project scope — explicitly noted.)
-%%
-%%   Ephemeral server sessions: the backend stores sessions in memory; a server
-%%   restart clears them. localStorage preserves the tree structure but not
-%%   all session metadata. Full persistence would require a database.
-%%
-%%   No tree export: users cannot export their discourse tree or summary panel
-%%   to a document, slide deck, or task manager.
-%%
-%%   Mode-awareness is prompt-level only: modes change the AI's instructions
-%%   but not the structural shape of the tree (e.g. logistics mode could
-%%   generate a timeline-shaped subtree; it currently does not).
-%%
-%%   Recontextualization discoverability: see Design Insights above.
-%%
-TODO: Write limitations.
+The current work is a design-and-build contribution without a formal user study.
+Mode-awareness operates at the prompt level only: modes reshape the AI's questioning
+style but not the structural form of the tree. The Plan Pane auto-refreshes on every
+answered question, which may produce stochastic variation across similar tree states,
+making it difficult for users to maintain a stable document; automatic refreshes bypass
+the accept/reject preview flow that otherwise protects user edits. Finally,
+recontextualization lacks a strong affordance, meaning one of the system's more
+sophisticated behaviours may go largely unnoticed.
 
 %% ── 5.3 ───────────────────────────────────────────────────────────────────────
 \subsection{Future Evaluation}
@@ -906,7 +683,17 @@ TODO: Write limitations.
 %%   design with 12 participants; Luminate [Suh 2024] used 14 professionals.
 %%   MidWife would need ~16–20 participants for adequate power.
 %%
-TODO: Write future evaluation subsection.
+The first evaluation we would conduct is a between-subjects comparison of midWife
+against a standard LLM chat interface on a structured open-ended planning task.
+The primary measure would be \textit{decision coverage} --- the number of distinct
+planning dimensions addressed, rated against a gold-standard checklist ---
+directly operationalising midWife's central claim that Socratic tree-structured
+dialogue surfaces more of the problem space than linear chat. A between-subjects
+design avoids carryover effects from one tool's framing of the problem.
+
+Secondary measures would include NASA-TLX, self-reported confidence in the plan, and
+time-on-task. A sample of 16--20 participants per condition would provide adequate
+power, consistent with prior work at this scale~\cite{suh2023sensecape, suh2024luminate}.
 
 %% ── 5.4 ───────────────────────────────────────────────────────────────────────
 \subsection{Future Directions}
@@ -930,7 +717,17 @@ TODO: Write future evaluation subsection.
 %%   how trees evolve as plans change, and whether Socratic structure improves
 %%   plan execution outcomes over weeks or months.
 %%
-TODO: Write future directions.
+Several natural extensions of midWife stand out. \textbf{Adaptive scaffolding} would
+adjust question depth and specificity based on observed user behaviour --- how
+confidently they answer, how often they open the chat, how aggressively they
+elaborate --- rather than relying solely on the selected mode. \textbf{Collaborative
+sessions} would extend the discourse tree to multiple users co-constructing a plan,
+which may be valuable for team decision-making and project scoping. \textbf{Richer
+export} --- Gantt charts, structured task lists, or slide outlines generated directly
+from the tree --- would allow the planning artifact to travel into a user's broader
+workflow. Finally, a \textbf{longitudinal study} could examine whether users return
+to and revise completed trees over time, and whether Socratic structure during
+planning produces better execution outcomes downstream.
 
 
 %% ═══════════════════════════════════════════════════════════════════════════════
@@ -947,7 +744,15 @@ TODO: Write future directions.
 %% this paradigm; the natural next step is a controlled evaluation comparing
 %% MidWife to standard LLM chat on structured planning tasks.
 %%
-TODO: Write conclusion.
+Complex planning tasks routinely outgrow what a linear chat interface can hold.
+midWife addresses this by modelling deliberation as an interactive discourse tree
+in which an LLM acts as a Socratic interlocutor --- asking rather than answering,
+probing rather than summarising --- and distilling the result into an actionable Plan.
+The prototype demonstrates the feasibility of this paradigm across nine planning modes
+with a mixed-initiative interaction model. The natural next step is a between-subjects
+evaluation against standard LLM chat, testing whether Socratic tree-structured
+dialogue surfaces more of the problem space. We hope midWife opens a line of inquiry
+into interfaces that think \textit{with} their users rather than merely respond to them.
 
 
 %% ═══════════════════════════════════════════════════════════════════════════════
