@@ -1808,6 +1808,16 @@ body.theme-dark .discourse-node__desc {
   background: var(--bg);
 }
 
+.chat-messages__placeholder {
+  margin: auto;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 1.3rem;
+  font-weight: 600;
+  padding: 0 20px;
+  line-height: 1.4;
+}
+
 .chat-message {
   max-width: 90%;
   padding: 8px 12px;
@@ -5531,4 +5541,52 @@ body.theme-dark .iplan-watchout {
   color: var(--text-1);
 }
 
+/* ── Plan diff styles ─────────────────────────────────────────────────────── */
+
+.iplan-diff-added {
+  position: relative;
+  background: rgba(16, 185, 129, 0.22);
+  border-left: 3px solid #10b981;
+  padding-left: 6px;
+  margin-left: -8px;
+  border-radius: 0 3px 3px 0;
+}
+
+.iplan-diff-removed {
+  position: relative;
+  background: rgba(239, 68, 68, 0.18);
+  border-left: 3px solid #ef4444;
+  padding-left: 6px;
+  margin-left: -8px;
+  border-radius: 0 3px 3px 0;
+}
+
+.iplan-diff-removed .iplan-task-label,
+.iplan-diff-removed .iplan-timeline-label,
+.iplan-diff-removed .iplan-timeline-phase,
+.iplan-diff-removed .iplan-list-item {
+  text-decoration: line-through;
+}
+
+.iplan-diff-removed .iplan-checkbox {
+  display: none;
+}
+
+.iplan-diff-modified {
+  position: relative;
+  background: rgba(245, 158, 11, 0.18);
+  border-left: 3px solid #f59e0b;
+  padding-left: 6px;
+  margin-left: -8px;
+  border-radius: 0 3px 3px 0;
+}
+
+/* Old text shown above the new value for modified items */
+.iplan-diff-old {
+  display: block;
+  font-size: 0.8em;
+  text-decoration: line-through;
+  margin-bottom: 2px;
+  opacity: 0.6;
+}
 

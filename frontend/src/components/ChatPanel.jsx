@@ -86,7 +86,7 @@ export default function ChatPanel({
           {onClose && <button className="chat-panel-close" onClick={onClose} title="Close">×</button>}
         </div>
         <div className="chat-empty-state">
-          <p>No conversations yet.</p>
+          <p>What would you like to refine in the Plan?</p>
           <button className="chat-new-thread" onClick={onNewThread}>+ New Chat</button>
         </div>
       </div>
@@ -133,6 +133,9 @@ export default function ChatPanel({
       {panelView === "chat" && activeThread && (
         <>
           <div className="chat-messages">
+            {activeThread.messages.length === 0 && (
+              <p className="chat-messages__placeholder">How would you like to refine this plan?</p>
+            )}
             {activeThread.messages.map((msg, i) => (
               <div key={i} className={`chat-message chat-message--${msg.role}`}>
                 <p>{msg.content}</p>
@@ -214,7 +217,7 @@ export default function ChatPanel({
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               rows={1}
-              placeholder={chatContextNodeId === "plan" ? "How would you like to steer this plan?" : "Ask Midwife anything… (Shift+Enter for newline)"}
+              placeholder="Ask Midwife..."
             />
             <button type="submit" title="Send">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
@@ -227,7 +230,7 @@ export default function ChatPanel({
 
       {panelView === "chat" && !activeThread && (
         <div className="chat-empty-state">
-          <p>Select or start a conversation.</p>
+          <p>What would you like to refine in the Plan?</p>
           <button className="chat-new-thread" onClick={() => { onNewThread(); setPanelView("chat"); }}>+ New Chat</button>
         </div>
       )}

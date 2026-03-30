@@ -701,7 +701,64 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
 
   const [interviewReady, setInterviewReady] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [proposedPlan, setProposedPlan] = useState(null);
+  const [proposedPlan, setProposedPlan] = useState(null); // annotated diff plan (has _diffStatus fields)
+
+  // Apply patch operations to the current plan, tagging changed items with _diffStatus
+  function applyPatchesForDiff(currentPlan, patches) {
+    const plan = JSON.parse(JSON.stringify(currentPlan));
+    for (const patch of patches) {
+      if (patch.op === "add_item") {
+        const section = plan.sections?.find(s => s.type === patch.section_type);
+        if (section) {
+          const newItem = { ...patch.item, _diffStatus: "added" };
+          const idx = patch.after_id ? section.items.findIndex(i => i.id === patch.after_id) : -1;
+          section.items.splice(idx >= 0 ? idx + 1 : section.items.length, 0, newItem);
+        }
+      } else if (patch.op === "remove_item") {
+        for (const section of plan.sections || []) {
+          const item = section.items?.find(i => i.id === patch.item_id);
+          if (item) { item._diffStatus = "removed"; break; }
+        }
+      } else if (patch.op === "modify_item") {
+        for (const section of plan.sections || []) {
+          const item = section.items?.find(i => i.id === patch.item_id);
+          if (item) {
+            item._diffStatus = "modified";
+            item._oldText = item.text ?? item.label;
+            if (patch.text !== undefined) item.text = patch.text;
+            if (patch.phase !== undefined) { item._oldPhase = item.phase; item.phase = patch.phase; }
+            if (patch.label !== undefined) item.label = patch.label;
+            break;
+          }
+        }
+      } else if (patch.op === "add_section") {
+        plan.sections = plan.sections || [];
+        plan.sections.push({ ...patch.section, _diffStatus: "added" });
+      } else if (patch.op === "remove_section") {
+        const section = plan.sections?.find(s => s.type === patch.section_type);
+        if (section) section._diffStatus = "removed";
+      }
+    }
+    return plan;
+  }
+
+  // Strip diff metadata and drop removed items/sections → clean plan ready to save
+  function cleanPlan(diffPlan) {
+    return {
+      ...diffPlan,
+      sections: (diffPlan.sections || [])
+        .filter(s => s._diffStatus !== "removed")
+        .map(s => {
+          const { _diffStatus, ...sectionClean } = s;
+          return {
+            ...sectionClean,
+            items: (s.items || [])
+              .filter(i => i._diffStatus !== "removed")
+              .map(i => { const { _diffStatus, _oldText, _oldPhase, ...itemClean } = i; return itemClean; }),
+          };
+        }),
+    };
+  }
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [apiError, setApiError] = useState(null);
   useEffect(() => {
@@ -1227,13 +1284,14 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
   }
 
   function handleRefinePlan() {
+    handleNewThread();
     setChatOpen(true);
     setChatContextNodeId("plan");
     setChatContextTabId("overview");
   }
 
   function handleAcceptProposedPlan(plan) {
-    const newContent = JSON.stringify(plan);
+    const newContent = JSON.stringify(cleanPlan(plan));
     const newTabs = panelTabs.map((t, i) => i === 0 ? { ...t, content: newContent } : t);
     setPanelTabs(newTabs);
     setProposedPlan(null);
@@ -1314,9 +1372,14 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
       ));
     }
 
-    // Handle proposed plan from plan-refinement chat
-    if (data.proposed_plan) {
-      setProposedPlan(data.proposed_plan);
+    // Handle plan patches from plan-refinement chat — apply to current plan to get diff view
+    if (data.plan_patches?.length > 0) {
+      try {
+        const currentPlan = JSON.parse(panelTabs?.[0]?.content || "");
+        if (currentPlan?.sections) {
+          setProposedPlan(applyPatchesForDiff(currentPlan, data.plan_patches));
+        }
+      } catch {}
     }
 
     const assistantMsg = {

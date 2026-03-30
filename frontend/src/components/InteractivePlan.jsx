@@ -21,6 +21,13 @@ export function planToMarkdown(plan) {
   return lines.join("\n");
 }
 
+function diffItemClass(status) {
+  if (status === "added") return " iplan-diff-added";
+  if (status === "removed") return " iplan-diff-removed";
+  if (status === "modified") return " iplan-diff-modified";
+  return "";
+}
+
 function TaskSection({ section, sessionId, muted }) {
   const storageKey = (id) => `plan:${sessionId}:${id}`;
 
@@ -41,19 +48,27 @@ function TaskSection({ section, sessionId, muted }) {
   }
 
   return (
-    <div className={`iplan-section iplan-tasks${muted ? " iplan-section--muted" : ""}`}>
+    <div className={`iplan-section iplan-tasks${muted ? " iplan-section--muted" : ""}${diffItemClass(section._diffStatus)}`}>
       <div className="iplan-section-title">{section.title}</div>
       <ul className="iplan-task-list">
         {(section.items || []).map(item => (
-          <li key={item.id} className={`iplan-task-item${checked[item.id] ? " iplan-task-item--done" : ""}`}>
-            <input
-              type="checkbox"
-              className="iplan-checkbox"
-              checked={!!checked[item.id]}
-              onChange={() => toggle(item.id)}
-              id={`task-${item.id}`}
-            />
-            <label htmlFor={`task-${item.id}`} className="iplan-task-label">{item.text}</label>
+          <li key={item.id} className={`iplan-task-item${checked[item.id] ? " iplan-task-item--done" : ""}${diffItemClass(item._diffStatus)}`}>
+            {item._diffStatus !== "removed" && (
+              <input
+                type="checkbox"
+                className="iplan-checkbox"
+                checked={!!checked[item.id]}
+                onChange={() => toggle(item.id)}
+                id={`task-${item.id}`}
+                disabled={!!item._diffStatus}
+              />
+            )}
+            <label htmlFor={`task-${item.id}`} className="iplan-task-label">
+              {item._diffStatus === "modified" && item._oldText && (
+                <span className="iplan-diff-old">{item._oldText}</span>
+              )}
+              {item.text}
+            </label>
           </li>
         ))}
       </ul>
@@ -81,18 +96,29 @@ function TimelineSection({ section, sessionId, muted }) {
   }
 
   return (
-    <div className={`iplan-section iplan-timeline-section${muted ? " iplan-section--muted" : ""}`}>
+    <div className={`iplan-section iplan-timeline-section${muted ? " iplan-section--muted" : ""}${diffItemClass(section._diffStatus)}`}>
       <div className="iplan-section-title">{section.title}</div>
       <div className="iplan-timeline">
         {(section.items || []).map((item, idx) => (
-          <div key={item.id} className={`iplan-timeline-item${checked[item.id] ? " iplan-timeline-item--done" : ""}`}>
+          <div key={item.id} className={`iplan-timeline-item${checked[item.id] ? " iplan-timeline-item--done" : ""}${diffItemClass(item._diffStatus)}`}>
             <div className="iplan-timeline-left">
-              <div className={`iplan-timeline-dot${checked[item.id] ? " iplan-timeline-dot--done" : ""}`} onClick={() => toggle(item.id)} />
+              <div className={`iplan-timeline-dot${checked[item.id] ? " iplan-timeline-dot--done" : ""}`}
+                onClick={() => item._diffStatus !== "removed" && toggle(item.id)} />
               {idx < section.items.length - 1 && <div className="iplan-timeline-line" />}
             </div>
             <div className="iplan-timeline-right">
-              <span className="iplan-timeline-phase">{item.phase}</span>
-              <span className={`iplan-timeline-label${checked[item.id] ? " iplan-timeline-label--done" : ""}`}>{item.label}</span>
+              <span className="iplan-timeline-phase">
+                {item._diffStatus === "modified" && item._oldPhase && (
+                  <span className="iplan-diff-old">{item._oldPhase}</span>
+                )}
+                {item.phase}
+              </span>
+              <span className={`iplan-timeline-label${checked[item.id] ? " iplan-timeline-label--done" : ""}`}>
+                {item._diffStatus === "modified" && item._oldText && !item._oldPhase && (
+                  <span className="iplan-diff-old">{item._oldText}</span>
+                )}
+                {item.label}
+              </span>
             </div>
           </div>
         ))}
@@ -103,11 +129,16 @@ function TimelineSection({ section, sessionId, muted }) {
 
 function ListSection({ section, className, muted }) {
   return (
-    <div className={`iplan-section ${className}${muted ? " iplan-section--muted" : ""}`}>
+    <div className={`iplan-section ${className}${muted ? " iplan-section--muted" : ""}${diffItemClass(section._diffStatus)}`}>
       <div className="iplan-section-title">{section.title}</div>
       <ul className="iplan-list">
         {(section.items || []).map(item => (
-          <li key={item.id} className="iplan-list-item">{item.text || item.label || ""}</li>
+          <li key={item.id} className={`iplan-list-item${diffItemClass(item._diffStatus)}`}>
+            {item._diffStatus === "modified" && item._oldText && (
+              <span className="iplan-diff-old">{item._oldText}</span>
+            )}
+            {item.text || item.label || ""}
+          </li>
         ))}
       </ul>
     </div>

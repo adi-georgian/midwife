@@ -133,11 +133,11 @@ export default function RightPanel({
           <>
             {proposedPlan && (
               <div className="iplan-proposed-wrap">
-                <div className="iplan-proposed-header">Proposed Plan</div>
+                <div className="iplan-proposed-header">Proposed Changes</div>
                 <InteractivePlan content={JSON.stringify(proposedPlan)} sessionId={sessionId} muted />
                 <div className="iplan-proposed-actions">
                   <button className="iplan-accept-btn" onClick={() => onAcceptProposedPlan(proposedPlan)}>
-                    Accept Plan
+                    Accept Changes
                   </button>
                   <button className="iplan-reject-btn" onClick={onRejectProposedPlan}>
                     Keep Current

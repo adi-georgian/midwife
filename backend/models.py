@@ -151,7 +151,7 @@ class ChatResponse(BaseModel):
     updated_aspect: str | None = None
     updated_question: str | None = None
     updated_tab: PanelTab | None = None
-    proposed_plan: dict | None = None
+    plan_patches: list | None = None
 
 
 class AddAspectRequest(BaseModel):

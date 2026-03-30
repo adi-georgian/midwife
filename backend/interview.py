@@ -24,13 +24,34 @@ def _trunc(text: str, max_chars: int = 120) -> str:
 
 
 def _extract_json(raw: str) -> dict:
-    """Extract and parse the first JSON object from a string, tolerating prose/markdown around it."""
+    """Extract and parse the first balanced JSON object from a string, tolerating prose/markdown."""
     text = raw.strip()
-    brace = text.find("{")
-    rbrace = text.rfind("}")
-    if brace == -1 or rbrace == -1 or rbrace < brace:
+    start = text.find("{")
+    if start == -1:
         raise json.JSONDecodeError("No JSON object found", text, 0)
-    return json.loads(text[brace:rbrace + 1])
+    depth = 0
+    in_string = False
+    escape_next = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\" and in_string:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return json.loads(text[start:i + 1])
+    raise json.JSONDecodeError("Unbalanced JSON object", text, 0)
 # Models tried in order; first healthy one wins.
 GEMINI_MODELS = [
     "gemini-2.0-flash",
@@ -376,24 +397,34 @@ def generate_panel_tabs(objective: str, mode: str, background: dict, tree: dict,
     return [{"id": "overview", "title": "Plan", "content": content}]
 
 
-PLAN_REFINEMENT_SYSTEM = """You are helping the user refine their plan. The current plan is shown below.
+PLAN_CHAT_BASE = """You are Midwife, a planning assistant. The user is chatting specifically about their plan.
+Your entire focus is the plan shown below — not the broader planning session, not individual aspects.
+All questions and instructions from the user are about this plan only.
+Keep replies concise and direct. Always respond with valid JSON only:
+{"reply": "...", "suggested_answer": null, "suggested_answers": [], "updated_aspect": null, "updated_question": null, "plan_patches": null}
+- suggested_answer, suggested_answers, updated_aspect, updated_question: always null/[].
+- plan_patches: a list of patch operations when the user wants to change the plan, otherwise null."""
 
-Your role:
-- Have a short conversational back-and-forth (1-2 questions max) to understand exactly what they want changed.
-- Once you understand their intent well enough, generate a full proposed_plan JSON in the same structured format.
-- In your reply, briefly describe what you are changing and why, then present the proposal.
-- If you don't yet have enough clarity, reply conversationally and leave proposed_plan as null.
+PLAN_REFINEMENT_SYSTEM = """You are helping the user make targeted, incremental edits to their plan.
 
-The proposed_plan must follow this exact shape:
-{{
-  "title": "...",
-  "sections": [
-    {{"type": "tasks", "title": "Action Steps", "items": [{{"id": "t1", "text": "..."}}]}},
-    {{"type": "timeline", "title": "Timeline", "items": [{{"id": "tl1", "phase": "Week 1", "label": "..."}}]}},
-    {{"type": "watchout", "title": "Watch Out For", "items": [{{"id": "w1", "text": "..."}}]}},
-    {{"type": "questions", "title": "Open Questions", "items": [{{"id": "q1", "text": "..."}}]}}
-  ]
-}}
+Core rule: MINIMUM NECESSARY CHANGES ONLY. Do not touch anything that was not explicitly asked about. Do not restructure, reorder, rename sections, or regenerate any content beyond the specific request.
+
+Return plan_patches — a small list of precise operations:
+
+{{"op": "add_item", "section_type": "<tasks|timeline|watchout|questions>", "item": {{"id": "<new_id>", "text": "<text>"}}, "after_id": "<existing_id_or_null>"}}
+  (Timeline items use {{"id": "...", "phase": "Week 1", "label": "description"}} instead of "text")
+
+{{"op": "remove_item", "item_id": "<id>"}}
+
+{{"op": "modify_item", "item_id": "<id>", "text": "<new_text>"}}
+  (Timeline: use "phase" and/or "label" instead of "text"; only include fields being changed)
+
+{{"op": "add_section", "section": {{"type": "<type>", "title": "<title>", "items": [...]}}}}
+{{"op": "remove_section", "section_type": "<type>"}}
+
+New item IDs: use prefix t (tasks), tl (timeline), w (watchout), q (questions) + a number not already in the plan.
+
+If the request is unclear, set plan_patches to null and ask a clarifying question. Do not produce patches until you understand the exact change wanted.
 
 Current plan:
 {current_plan}"""
@@ -447,11 +478,14 @@ def generate_chat_reply(
     )
     if is_plan_refinement:
         current_plan = tab_context.get("current_content", "")
-        system += "\n\n" + PLAN_REFINEMENT_SYSTEM.format(current_plan=current_plan)
-        system = system.replace(
-            '{"reply": "...", "suggested_answer": null, "suggested_answers": [], "updated_aspect": null, "updated_question": null}',
-            '{"reply": "...", "suggested_answer": null, "suggested_answers": [], "updated_aspect": null, "updated_question": null, "proposed_plan": null}'
-        )
+        # Replace the entire system prompt — plan chat has nothing to do with aspect interviewing
+        system = PLAN_CHAT_BASE + "\n\n" + PLAN_REFINEMENT_SYSTEM.format(current_plan=current_plan)
+        # Add discourse tree context so the LLM knows what was actually decided
+        if answered_aspects:
+            tree_lines = "\n".join(f"- {a['aspect']}: {a['answer']}" for a in answered_aspects)
+            system += f"\n\nWhat the user has decided in their planning session so far:\n{tree_lines}"
+        if objective:
+            system += f"\n\nOverall planning objective: {objective}"
     elif tab_context:
         system += (
             f"\n\nThe user is discussing the \"{tab_context['tab_title']}\" section of their summary panel. "
@@ -469,9 +503,9 @@ def generate_chat_reply(
     try:
         data = _extract_json(raw)
         updated_tab = None
-        proposed_plan = None
-        if is_plan_refinement and data.get("proposed_plan"):
-            proposed_plan = data["proposed_plan"]
+        plan_patches = None
+        if is_plan_refinement and data.get("plan_patches"):
+            plan_patches = data["plan_patches"]
         elif tab_context and not is_plan_refinement and data.get("updated_tab_content"):
             updated_tab = {
                 "id": tab_context["tab_id"],
@@ -485,10 +519,14 @@ def generate_chat_reply(
             data.get("updated_aspect"),
             data.get("updated_question"),
             updated_tab,
-            proposed_plan,
+            plan_patches,
         )
     except Exception:
-        return raw, None, [], None, None, None, None
+        # If JSON parse fails, try to extract just the reply field rather than dumping raw
+        import re as _re
+        m = _re.search(r'"reply"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
+        fallback = m.group(1).replace('\\"', '"').replace("\\n", "\n") if m else "I ran into an issue generating a response. Please try again."
+        return fallback, None, [], None, None, None, None
 
 
 def recontextualize_ancestors(objective: str, ancestors: list[dict], mode: str = "") -> dict:
