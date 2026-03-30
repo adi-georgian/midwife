@@ -326,6 +326,8 @@ PANEL_PATCH_SYSTEM = (
     "  {{\"op\": \"add_item\", \"section_type\": \"<tasks|timeline|watchout|questions>\", "
     "\"item\": {{\"id\": \"<new_id>\", \"text\": \"<text>\"}}, \"after_id\": \"<id_or_null>\"}}\n"
     "  (Timeline items use {{\"id\": \"...\", \"phase\": \"...\", \"label\": \"...\"}} instead of \"text\")\n"
+    "  (Both task and timeline items support an optional \"children\" array: tasks use [{{\"id\":\"...\",\"text\":\"...\"}}], timeline use [{{\"id\":\"...\",\"label\":\"...\"}}])\n"
+    "  IMPORTANT for timeline: never create a new top-level item with the same phase as an existing item — put sub-items in children[] on the existing phase instead.\n"
     "  {{\"op\": \"remove_item\", \"item_id\": \"<id>\"}}\n"
     "  {{\"op\": \"modify_item\", \"item_id\": \"<id>\", \"text\": \"<new_text>\"}}\n"
     "  {{\"op\": \"add_section\", \"section\": {{\"type\": \"...\", \"title\": \"...\", \"items\": [...]}}}}\n"
@@ -360,7 +362,10 @@ def generate_panel_tabs(objective: str, mode: str, background: dict, tree: dict,
         try:
             data = _extract_json(raw)
             patches = data.get("plan_patches") or []
-        except Exception:
+        except Exception as e:
+            logger.error(f"[generate_panel/patch] JSON parse error: {e}")
+            logger.error(f"[generate_panel/patch] raw (first 500): {raw[:500] if raw else '<empty>'}")
+            logger.exception("[generate_panel/patch] full traceback:")
             patches = []
         return {"tabs": [], "plan_patches": patches}
 
@@ -388,12 +393,22 @@ def generate_panel_tabs(objective: str, mode: str, background: dict, tree: dict,
         '    {\n'
         '      "type": "tasks",\n'
         '      "title": "Action Steps",\n'
-        '      "items": [{"id": "t1", "text": "Concrete action verb + what to do"}]\n'
+        '      "items": [\n'
+        '        {"id": "t1", "text": "Top-level action step"},\n'
+        '        {"id": "t2", "text": "Another step", "children": [\n'
+        '          {"id": "t2a", "text": "Sub-task or detail"},\n'
+        '          {"id": "t2b", "text": "Another sub-task"}\n'
+        '        ]}\n'
+        '      ]\n'
         '    },\n'
         '    {\n'
         '      "type": "timeline",\n'
         '      "title": "Timeline",\n'
-        '      "items": [{"id": "tl1", "phase": "Week 1", "label": "Milestone description"}]\n'
+        '      "items": [\n'
+        '        {"id": "tl1", "phase": "Week 1", "label": "Milestone description", "children": [\n'
+        '          {"id": "tl1a", "label": "Sub-milestone or key task"}\n'
+        '        ]}\n'
+        '      ]\n'
         '    },\n'
         '    {\n'
         '      "type": "watchout",\n'
@@ -408,8 +423,8 @@ def generate_panel_tabs(objective: str, mode: str, background: dict, tree: dict,
         '  ]\n'
         '}\n\n'
         "Rules:\n"
-        "- tasks: 3-6 concrete, measurable, first-person action items (start with a verb: Research, Book, Draft, etc.)\n"
-        "- timeline: 3-5 phases with realistic labels (use mentioned timeframes, or rough labels like 'Week 1', 'Month 1')\n"
+        "- tasks: 3-6 concrete, measurable, first-person action items (start with a verb: Research, Book, Draft, etc.); use 'children' for meaningful sub-tasks when a step has distinct parts\n"
+        "- timeline: 3-5 phases with realistic labels (use mentioned timeframes, or rough labels like 'Week 1', 'Month 1'); use 'children' for sub-milestones or specific tasks within a phase — NEVER repeat the same phase value across multiple items; sub-items belong in children[]\n"
         "- watchout: 2-4 real risks or blockers grounded in what was discussed — not generic advice\n"
         "- questions: 2-3 meaningful unresolved questions from the discussion\n"
         "- Omit a section entirely if there is genuinely nothing meaningful to put in it\n"
@@ -431,7 +446,10 @@ def generate_panel_tabs(objective: str, mode: str, background: dict, tree: dict,
     raw = _generate_text(system, prompt, temperature=0.4, max_tokens=4096)
     try:
         plan_data = _extract_json(raw)
-    except Exception:
+    except Exception as e:
+        logger.error(f"[generate_panel/full] JSON parse error: {e}")
+        logger.error(f"[generate_panel/full] raw (first 500): {raw[:500] if raw else '<empty>'}")
+        logger.exception("[generate_panel/full] full traceback:")
         plan_data = {"sections": []}
 
     # Inject the canonical title into the plan object
@@ -446,10 +464,13 @@ def generate_panel_tabs(objective: str, mode: str, background: dict, tree: dict,
 PLAN_CHAT_BASE = """You are Midwife, a planning assistant. The user is chatting specifically about their plan.
 Your entire focus is the plan shown below — not the broader planning session, not individual aspects.
 All questions and instructions from the user are about this plan only.
-Keep replies concise and direct. Always respond with valid JSON only:
+Keep replies concise and direct.
+
+CRITICAL: You MUST always respond with valid JSON — no exceptions, no plain prose.
 {"reply": "...", "suggested_answer": null, "suggested_answers": [], "updated_aspect": null, "updated_question": null, "plan_patches": null}
 - suggested_answer, suggested_answers, updated_aspect, updated_question: always null/[].
-- plan_patches: a list of patch operations when the user wants to change the plan, otherwise null."""
+- plan_patches: a list of patch operations when the user wants to change the plan, otherwise null.
+- Even for clarifying questions or conversational replies, wrap your response in this JSON — put your text in "reply" and set plan_patches to null."""
 
 PLAN_REFINEMENT_SYSTEM = """You are helping the user make targeted, incremental edits to their plan.
 
@@ -459,6 +480,8 @@ Return plan_patches — a small list of precise operations:
 
 {{"op": "add_item", "section_type": "<tasks|timeline|watchout|questions>", "item": {{"id": "<new_id>", "text": "<text>"}}, "after_id": "<existing_id_or_null>"}}
   (Timeline items use {{"id": "...", "phase": "Week 1", "label": "description"}} instead of "text")
+  (Both task and timeline items support an optional "children" array for sub-items: [{{"id": "...", "text": "..."}}] for tasks, [{{"id": "...", "label": "..."}}] for timeline)
+  IMPORTANT for timeline: never create a new top-level item with the same phase as an existing item — add sub-items via children[] on the existing item instead (use modify_item to add children, or include children in add_item)
 
 {{"op": "remove_item", "item_id": "<id>"}}
 
@@ -532,6 +555,7 @@ def generate_chat_reply(
             system += f"\n\nWhat the user has decided in their planning session so far:\n{tree_lines}"
         if objective:
             system += f"\n\nOverall planning objective: {objective}"
+        system += "\n\nREMINDER: Respond with valid JSON only. Never write plain prose."
     elif tab_context:
         system += (
             f"\n\nThe user is discussing the \"{tab_context['tab_title']}\" section of their summary panel. "
@@ -567,11 +591,20 @@ def generate_chat_reply(
             updated_tab,
             plan_patches,
         )
-    except Exception:
-        # If JSON parse fails, try to extract just the reply field rather than dumping raw
+    except Exception as e:
         import re as _re
+        logger.error(f"[chat] JSON parse error: {e}")
+        logger.error(f"[chat] raw response (first 500 chars): {raw[:500] if raw else '<empty>'}")
+        logger.exception("[chat] full traceback:")
+        # Try to pull reply field from partial JSON first
         m = _re.search(r'"reply"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
-        fallback = m.group(1).replace('\\"', '"').replace("\\n", "\n") if m else "I ran into an issue generating a response. Please try again."
+        if m:
+            fallback = m.group(1).replace('\\"', '"').replace("\\n", "\n")
+        elif raw and raw.strip() and not raw.strip().startswith('{'):
+            # LLM responded with plain prose — use it directly rather than showing an error
+            fallback = raw.strip()
+        else:
+            fallback = "I ran into an issue generating a response. Please try again."
         return fallback, None, [], None, None, None, None
 
 

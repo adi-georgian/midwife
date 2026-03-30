@@ -5312,7 +5312,7 @@ body.theme-dark .discourse-node__desc {
 }
 
 .iplan-section-title {
-  font-size: 0.72rem;
+  font-size: 0.88rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -5355,6 +5355,20 @@ body.theme-dark .discourse-node__desc {
 .iplan-task-item--done .iplan-task-label {
   text-decoration: line-through;
   color: var(--text-3);
+}
+
+.iplan-task-list--nested {
+  list-style: none;
+  margin: 6px 0 0 20px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.iplan-task-item--nested .iplan-task-label {
+  font-size: 0.78rem;
+  color: var(--text-2);
 }
 
 /* Timeline */
@@ -5437,16 +5451,74 @@ body.theme-dark .discourse-node__desc {
   color: var(--text-3);
 }
 
-/* Watch Out For */
-.iplan-watchout {
-  background: rgba(217, 119, 6, 0.07);
-  border-left: 3px solid #d97706;
-  border-radius: 0 6px 6px 0;
-  padding: 10px 12px;
+.iplan-timeline-children {
+  list-style: none;
+  margin: 6px 0 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
-body.theme-dark .iplan-watchout {
-  background: rgba(217, 119, 6, 0.12);
+.iplan-timeline-child {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.iplan-timeline-child-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: 12px;
+}
+
+.iplan-timeline-child-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--blue-badge);
+  background: var(--surface);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+  margin-top: 3px;
+}
+
+.iplan-timeline-child-dot:hover {
+  background: var(--blue-badge);
+  opacity: 0.5;
+}
+
+.iplan-timeline-child-dot--done {
+  background: var(--blue-badge);
+  border-color: var(--blue-badge);
+}
+
+.iplan-timeline-child-line {
+  width: 2px;
+  flex: 1;
+  min-height: 14px;
+  background: var(--border);
+  margin: 3px 0;
+}
+
+.iplan-timeline-child-label {
+  font-size: 0.78rem;
+  color: var(--text-2);
+  line-height: 1.4;
+  cursor: pointer;
+  padding-bottom: 10px;
+}
+
+.iplan-timeline-child--done .iplan-timeline-child-label {
+  text-decoration: line-through;
+  color: var(--text-3);
+}
+
+/* Watch Out For */
+.iplan-watchout {
 }
 
 .iplan-list {

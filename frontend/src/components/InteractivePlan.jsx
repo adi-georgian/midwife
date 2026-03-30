@@ -1,24 +1,43 @@
 import { useState, useEffect } from "react";
 import PlanMarkdown from "./PlanMarkdown";
 
+function itemsToMarkdown(items, depth, type) {
+  const lines = [];
+  const indent = "  ".repeat(depth);
+  for (const item of items || []) {
+    if (type === "tasks") {
+      lines.push(`${indent}- [ ] ${item.text}`);
+    } else if (type === "timeline") {
+      lines.push(`${indent}- **${item.phase}**: ${item.label}`);
+    } else {
+      lines.push(`${indent}- ${item.text || item.label || ""}`);
+    }
+    if (item.children?.length) {
+      lines.push(...itemsToMarkdown(item.children, depth + 1, type));
+    }
+  }
+  return lines;
+}
+
 export function planToMarkdown(plan) {
   if (!plan || !plan.sections) return "";
   const lines = [];
   if (plan.title) lines.push(`# ${plan.title}`, "");
   for (const section of plan.sections) {
     lines.push(`## ${section.title}`, "");
-    for (const item of section.items || []) {
-      if (section.type === "tasks") {
-        lines.push(`- [ ] ${item.text}`);
-      } else if (section.type === "timeline") {
-        lines.push(`- **${item.phase}**: ${item.label}`);
-      } else {
-        lines.push(`- ${item.text || item.label || ""}`);
-      }
-    }
+    lines.push(...itemsToMarkdown(section.items, 0, section.type));
     lines.push("");
   }
   return lines.join("\n");
+}
+
+function flatItems(items) {
+  const result = [];
+  for (const item of items || []) {
+    result.push(item);
+    if (item.children?.length) result.push(...flatItems(item.children));
+  }
+  return result;
 }
 
 function diffItemClass(status) {
@@ -28,12 +47,42 @@ function diffItemClass(status) {
   return "";
 }
 
+function TaskItem({ item, storageKey, checked, toggle, nested }) {
+  return (
+    <li className={`iplan-task-item${nested ? " iplan-task-item--nested" : ""}${checked[item.id] ? " iplan-task-item--done" : ""}${diffItemClass(item._diffStatus)}`}>
+      {item._diffStatus !== "removed" && (
+        <input
+          type="checkbox"
+          className="iplan-checkbox"
+          checked={!!checked[item.id]}
+          onChange={() => toggle(item.id)}
+          id={`task-${item.id}`}
+          disabled={!!item._diffStatus}
+        />
+      )}
+      <label htmlFor={`task-${item.id}`} className="iplan-task-label">
+        {item._diffStatus === "modified" && item._oldText && (
+          <span className="iplan-diff-old">{item._oldText}</span>
+        )}
+        {item.text}
+      </label>
+      {(item.children || []).length > 0 && (
+        <ul className="iplan-task-list iplan-task-list--nested">
+          {item.children.map(child => (
+            <TaskItem key={child.id} item={child} storageKey={storageKey} checked={checked} toggle={toggle} nested />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
 function TaskSection({ section, sessionId, muted }) {
   const storageKey = (id) => `plan:${sessionId}:${id}`;
 
   const [checked, setChecked] = useState(() => {
     const init = {};
-    for (const item of section.items || []) {
+    for (const item of flatItems(section.items)) {
       try { init[item.id] = localStorage.getItem(storageKey(item.id)) === "1"; } catch { init[item.id] = false; }
     }
     return init;
@@ -52,24 +101,7 @@ function TaskSection({ section, sessionId, muted }) {
       <div className="iplan-section-title">{section.title}</div>
       <ul className="iplan-task-list">
         {(section.items || []).map(item => (
-          <li key={item.id} className={`iplan-task-item${checked[item.id] ? " iplan-task-item--done" : ""}${diffItemClass(item._diffStatus)}`}>
-            {item._diffStatus !== "removed" && (
-              <input
-                type="checkbox"
-                className="iplan-checkbox"
-                checked={!!checked[item.id]}
-                onChange={() => toggle(item.id)}
-                id={`task-${item.id}`}
-                disabled={!!item._diffStatus}
-              />
-            )}
-            <label htmlFor={`task-${item.id}`} className="iplan-task-label">
-              {item._diffStatus === "modified" && item._oldText && (
-                <span className="iplan-diff-old">{item._oldText}</span>
-              )}
-              {item.text}
-            </label>
-          </li>
+          <TaskItem key={item.id} item={item} storageKey={storageKey} checked={checked} toggle={toggle} />
         ))}
       </ul>
     </div>
@@ -81,7 +113,7 @@ function TimelineSection({ section, sessionId, muted }) {
 
   const [checked, setChecked] = useState(() => {
     const init = {};
-    for (const item of section.items || []) {
+    for (const item of flatItems(section.items)) {
       try { init[item.id] = localStorage.getItem(storageKey(item.id)) === "1"; } catch { init[item.id] = false; }
     }
     return init;
@@ -119,6 +151,24 @@ function TimelineSection({ section, sessionId, muted }) {
                 )}
                 {item.label}
               </span>
+              {(item.children || []).length > 0 && (
+                <ul className="iplan-timeline-children">
+                  {item.children.map((child, cidx) => (
+                    <li key={child.id} className={`iplan-timeline-child${checked[child.id] ? " iplan-timeline-child--done" : ""}`}>
+                      <div className="iplan-timeline-child-left">
+                        <div
+                          className={`iplan-timeline-child-dot${checked[child.id] ? " iplan-timeline-child-dot--done" : ""}`}
+                          onClick={() => toggle(child.id)}
+                        />
+                        {cidx < item.children.length - 1 && <div className="iplan-timeline-child-line" />}
+                      </div>
+                      <span className="iplan-timeline-child-label" onClick={() => toggle(child.id)}>
+                        {child.label || child.text || ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         ))}

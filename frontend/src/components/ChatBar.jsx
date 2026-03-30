@@ -53,7 +53,7 @@ export default function ChatBar({
     }
 
     function onMouseDown(e) {
-      if (barRef.current && !barRef.current.contains(e.target)) {
+      if (barRef.current && !barRef.current.contains(e.target) && !e.target.closest("[data-chat-persist]")) {
         setExpanded(false);
         onCollapse?.();
       }

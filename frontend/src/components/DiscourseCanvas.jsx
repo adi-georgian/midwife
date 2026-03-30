@@ -728,6 +728,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
             if (patch.text !== undefined) item.text = patch.text;
             if (patch.phase !== undefined) { item._oldPhase = item.phase; item.phase = patch.phase; }
             if (patch.label !== undefined) item.label = patch.label;
+            if (patch.children !== undefined) item.children = patch.children;
             break;
           }
         }
@@ -1491,7 +1492,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
     <div className="app-layout">
       <div className="canvas-header">
         <span className="canvas-brand" onClick={onHome} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onHome?.()}>midWife</span>
-        <div className="canvas-header-actions">
+        <div className="canvas-header-actions" data-chat-persist>
           <button className="canvas-header-btn" onClick={handleExport}>↓ Export</button>
           <div style={{ position: "relative" }}>
             <button

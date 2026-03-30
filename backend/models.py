@@ -137,6 +137,7 @@ class GeneratePanelResponse(BaseModel):
 class TabContext(BaseModel):
     tab_id: str
     tab_title: str
+    current_content: str | None = None
 
 
 class ChatRequest(BaseModel):

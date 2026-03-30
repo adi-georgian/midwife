@@ -92,7 +92,7 @@ export default function RightPanel({
         </div>
       </div>
     )}
-    <div className="right-panel" style={{ width }}>
+    <div className="right-panel" style={{ width }} data-chat-persist>
       <div
         className={`rpanel-resize-handle${dragBorderHovered ? " rpanel-resize-handle--active" : ""}`}
         onMouseEnter={() => setDragBorderHovered(true)}
@@ -158,7 +158,7 @@ export default function RightPanel({
         )}
       </div>
 
-      {!discourseFinished && phase === "selecting" && (
+      {!discourseFinished && phase === "selecting" && !proposedPlan && (
         <div className="rpanel-actions">
           <button
             className="rpanel-action-btn rpanel-action-btn--continue"
