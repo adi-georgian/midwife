@@ -1814,6 +1814,7 @@ body.theme-dark .discourse-node__desc {
   color: var(--text-3);
   font-size: 1.3rem;
   font-weight: 600;
+  font-family: var(--font-serif);
   padding: 0 20px;
   line-height: 1.4;
 }
@@ -1964,6 +1965,13 @@ body.theme-dark .discourse-node__desc {
   color: var(--text-3);
   font-size: 0.88rem;
   text-align: center;
+}
+
+.chat-empty-state p {
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 /* --- Node Context Menu --- */
@@ -5346,6 +5354,7 @@ body.theme-dark .discourse-node__desc {
 }
 
 .iplan-task-label {
+  display: block;
   font-size: 0.82rem;
   color: var(--text-1);
   line-height: 1.4;
@@ -5357,9 +5366,16 @@ body.theme-dark .discourse-node__desc {
   color: var(--text-3);
 }
 
+.iplan-task-item-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
 .iplan-task-list--nested {
   list-style: none;
-  margin: 6px 0 0 20px;
+  margin: 6px 0 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;

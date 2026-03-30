@@ -679,6 +679,7 @@ def generate_questions(
 
     if background:
         bg_lines = []
+        # Structured Q&A pairs (from briefing or future flows)
         for pair in (background.get("qa_pairs") or []):
             if pair.get("question") and pair.get("answer"):
                 bg_lines.append(f"{pair['question']}: {pair['answer']}")
@@ -727,6 +728,9 @@ def generate_questions(
         )
 
     prompt = f"Objective: {objective}\n\n{context_text}"
+
+    print(f"[generate_questions] SYSTEM:\n{system_instruction}\n")
+    print(f"[generate_questions] PROMPT:\n{prompt}\n")
 
     for attempt in range(2):
         raw = _generate_text(system_instruction, prompt, temperature=0.7, response_schema=_ASPECTS_SCHEMA)

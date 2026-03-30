@@ -76,12 +76,9 @@ async def create_session(request: CreateSessionRequest):
         session_id = str(uuid.uuid4())
 
         background = {
-            "help_level": request.help_level,
-            "prior_knowledge": request.prior_knowledge,
-            "already_planned": request.already_planned,
-            "constraints": request.constraints,
             "knowledge_level": request.knowledge_level,
             "extra_context": request.extra_context,
+            "qa_pairs": request.qa_pairs,
         }
         has_background = any(background.values())
 

@@ -914,6 +914,15 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
     return () => clearTimeout(timer);
   }, [chatOpen, leftPanelOpen, rightPanelOpen]);
 
+  // Auto-label the active thread whenever the chat closes
+  const prevChatOpenRef = useRef(false);
+  useEffect(() => {
+    if (prevChatOpenRef.current && !chatOpen) {
+      autoLabelThread(activeChatThreadIdRef.current);
+    }
+    prevChatOpenRef.current = chatOpen;
+  }, [chatOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!tree || !sessionId) return;
     onSessionChange?.({
@@ -1416,7 +1425,6 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
     setChatThreads(prev =>
       prev.map(t => t.aspectId === aspectId ? { ...t, resolvedAnswerFor: aspectId } : t)
     );
-    autoLabelThread(activeChatThreadIdRef.current);
     setChatOpen(false);
     setInterviewPaused(false);
   }
@@ -1767,7 +1775,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
           onUseAsAnswer={handleUseAsAnswer}
           onSwitchToThreads={handleSwitchToThreadsView}
           initialExpanded={chatOpen}
-          onCollapse={() => { autoLabelThread(activeChatThreadIdRef.current); setChatThreads(prev => pruneEmptyThreads(prev)); setChatOpen(false); }}
+          onCollapse={() => { setChatThreads(prev => pruneEmptyThreads(prev)); setChatOpen(false); }}
           interviewPaused={interviewPaused}
           onResumeInterview={() => setInterviewPaused(false)}
           tree={tree}

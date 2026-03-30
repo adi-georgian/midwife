@@ -37,6 +37,8 @@ export default function ChatPanel({
   const flatNodes = useMemo(() => (tree ? flattenTree(tree) : []), [tree]);
 
   const activeThread = threads.find(t => t.id === activeThreadId) || null;
+  const isPlanContext = chatContextNodeId === "plan";
+  const emptyPrompt = isPlanContext ? "How would you like to refine this plan?" : "What's on your mind?";
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -86,7 +88,7 @@ export default function ChatPanel({
           {onClose && <button className="chat-panel-close" onClick={onClose} title="Close">×</button>}
         </div>
         <div className="chat-empty-state">
-          <p>What would you like to refine in the Plan?</p>
+          <p>{emptyPrompt}</p>
           <button className="chat-new-thread" onClick={onNewThread}>+ New Chat</button>
         </div>
       </div>
@@ -134,7 +136,7 @@ export default function ChatPanel({
         <>
           <div className="chat-messages">
             {activeThread.messages.length === 0 && (
-              <p className="chat-messages__placeholder">How would you like to refine this plan?</p>
+              <p className="chat-messages__placeholder">{emptyPrompt}</p>
             )}
             {activeThread.messages.map((msg, i) => (
               <div key={i} className={`chat-message chat-message--${msg.role}`}>
@@ -230,7 +232,7 @@ export default function ChatPanel({
 
       {panelView === "chat" && !activeThread && (
         <div className="chat-empty-state">
-          <p>What would you like to refine in the Plan?</p>
+          <p>{emptyPrompt}</p>
           <button className="chat-new-thread" onClick={() => { onNewThread(); setPanelView("chat"); }}>+ New Chat</button>
         </div>
       )}

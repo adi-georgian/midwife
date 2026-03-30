@@ -60,19 +60,21 @@ function TaskItem({ item, storageKey, checked, toggle, nested }) {
           disabled={!!item._diffStatus}
         />
       )}
-      <label htmlFor={`task-${item.id}`} className="iplan-task-label">
-        {item._diffStatus === "modified" && item._oldText && (
-          <span className="iplan-diff-old">{item._oldText}</span>
+      <div className="iplan-task-item-body">
+        <label htmlFor={`task-${item.id}`} className="iplan-task-label">
+          {item._diffStatus === "modified" && item._oldText && (
+            <span className="iplan-diff-old">{item._oldText}</span>
+          )}
+          {item.text}
+        </label>
+        {(item.children || []).length > 0 && (
+          <ul className="iplan-task-list iplan-task-list--nested">
+            {item.children.map(child => (
+              <TaskItem key={child.id} item={child} storageKey={storageKey} checked={checked} toggle={toggle} nested />
+            ))}
+          </ul>
         )}
-        {item.text}
-      </label>
-      {(item.children || []).length > 0 && (
-        <ul className="iplan-task-list iplan-task-list--nested">
-          {item.children.map(child => (
-            <TaskItem key={child.id} item={child} storageKey={storageKey} checked={checked} toggle={toggle} nested />
-          ))}
-        </ul>
-      )}
+      </div>
     </li>
   );
 }

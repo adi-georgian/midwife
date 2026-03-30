@@ -73,12 +73,9 @@ class SessionState(BaseModel):
 class CreateSessionRequest(BaseModel):
     objective: str
     mode: str = ""          # e.g. "logistics", "brainstorming", "creative", "problem_solving", "decision", "research"
-    help_level: str = ""
-    prior_knowledge: str = ""
-    already_planned: str = ""
-    constraints: str = ""
     knowledge_level: str = ""
     extra_context: str = ""
+    qa_pairs: list[dict] = []
 
 
 class CreateSessionResponse(BaseModel):

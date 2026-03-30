@@ -15,12 +15,9 @@ export async function createSession(objective, background = {}) {
     body: JSON.stringify({
       objective,
       mode: background.mode || "",
-      help_level: background.helpLevel || "",
-      prior_knowledge: background.priorKnowledge || "",
-      already_planned: background.alreadyPlanned || "",
-      constraints: background.constraints || "",
       knowledge_level: background.knowledgeLevel || "",
       extra_context: background.extraContext || "",
+      qa_pairs: background.qaPairs || [],
     }),
   });
 }
