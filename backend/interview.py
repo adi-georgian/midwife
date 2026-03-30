@@ -709,7 +709,7 @@ def generate_questions(
             context_text += f"{indent}Answer: {node['answer']}\n\n"
         context_text += f"Generate {max_questions} sub-questions that dig deeper into the innermost topic above."
 
-    if len(context_path or []) > 1:
+    if len(context_path or []) >= 1:
         parent_aspect = context_path[-1]["aspect"]
         context_text += (
             f"\nYou are generating sub-questions specifically for the parent aspect: \"{parent_aspect}\". "
