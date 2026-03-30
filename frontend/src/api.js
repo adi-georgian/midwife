@@ -81,8 +81,12 @@ export async function sendChatMessage(sessionId, messages, aspectContext = null,
   });
 }
 
-export async function generatePanelTabs(sessionId) {
-  return apiFetch(`/session/${sessionId}/generate-panel`, { method: "POST" });
+export async function generatePanelTabs(sessionId, existingPlan = null) {
+  return apiFetch(`/session/${sessionId}/generate-panel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ existing_plan: existingPlan }),
+  });
 }
 
 export async function updateAspect(sessionId, aspectId, fields) {

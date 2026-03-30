@@ -23,6 +23,7 @@ from backend.models import (
     CreateSessionResponse,
     ElaborateResponse,
     GenerateAspectsRequest,
+    GeneratePanelRequest,
     GeneratePanelResponse,
     LabelChatRequest,
     MoveAspectRequest,
@@ -410,19 +411,25 @@ async def chat(session_id: str, request: ChatRequest):
 
 
 @app.post("/session/{session_id}/generate-panel", response_model=GeneratePanelResponse)
-async def generate_panel(session_id: str):
+async def generate_panel(session_id: str, request: GeneratePanelRequest = None):
+    if request is None:
+        request = GeneratePanelRequest()
     session = store.get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     try:
-        tabs = generate_panel_tabs(
+        result = generate_panel_tabs(
             objective=session.objective,
             mode=session.mode,
             background=session.background,
             tree=session.root.model_dump(),
             title=session.discourse_name or session.objective,
+            existing_plan=request.existing_plan,
         )
-        return GeneratePanelResponse(tabs=[PanelTab(**t) for t in tabs])
+        return GeneratePanelResponse(
+            tabs=[PanelTab(**t) for t in result["tabs"]],
+            plan_patches=result["plan_patches"],
+        )
     except (ServerError, ClientError, _anthropic.APIStatusError, RuntimeError) as e:
         raise HTTPException(status_code=503, detail="AI service is currently overloaded. Please try again in a moment.")
 

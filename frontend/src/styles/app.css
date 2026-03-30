@@ -5584,7 +5584,6 @@ body.theme-dark .iplan-watchout {
 /* Old text shown above the new value for modified items */
 .iplan-diff-old {
   display: block;
-  font-size: 0.8em;
   text-decoration: line-through;
   margin-bottom: 2px;
   opacity: 0.6;

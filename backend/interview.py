@@ -316,8 +316,55 @@ def _tree_to_text(node: dict, depth: int = 0) -> str:
     return "\n".join(lines)
 
 
-def generate_panel_tabs(objective: str, mode: str, background: dict, tree: dict, title: str = "") -> list[dict]:
-    """Generate an interactive structured plan for the given session."""
+PANEL_PATCH_SYSTEM = (
+    "You are updating a planning document to reflect newly gathered information.\n\n"
+    "Core rule: MINIMUM NECESSARY CHANGES. Preserve everything already accurate. "
+    "Only patch items that are genuinely new or outdated given the answered aspects. "
+    "If nothing needs changing, return an empty list [].\n\n"
+    "Return a JSON object: {{\"plan_patches\": [...]}}\n"
+    "Use the same patch operations as plan refinement:\n"
+    "  {{\"op\": \"add_item\", \"section_type\": \"<tasks|timeline|watchout|questions>\", "
+    "\"item\": {{\"id\": \"<new_id>\", \"text\": \"<text>\"}}, \"after_id\": \"<id_or_null>\"}}\n"
+    "  (Timeline items use {{\"id\": \"...\", \"phase\": \"...\", \"label\": \"...\"}} instead of \"text\")\n"
+    "  {{\"op\": \"remove_item\", \"item_id\": \"<id>\"}}\n"
+    "  {{\"op\": \"modify_item\", \"item_id\": \"<id>\", \"text\": \"<new_text>\"}}\n"
+    "  {{\"op\": \"add_section\", \"section\": {{\"type\": \"...\", \"title\": \"...\", \"items\": [...]}}}}\n"
+    "  {{\"op\": \"remove_section\", \"section_type\": \"<type>\"}}\n\n"
+    "New item IDs: prefix t (tasks), tl (timeline), w (watchout), q (questions) + unused number.\n\n"
+    "Existing plan:\n{existing_plan}\n\n"
+    "All answered aspects:\n{answered_aspects}"
+)
+
+
+def generate_panel_tabs(objective: str, mode: str, background: dict, tree: dict, title: str = "", existing_plan: str | None = None) -> dict:
+    """Generate an interactive structured plan, or patches if an existing plan is provided."""
+    import json as _json
+
+    # --- Patch mode: existing plan provided — emit only diffs ---
+    if existing_plan:
+        def _collect_answered_dict(node: dict) -> list[dict]:
+            results = []
+            if node.get("answer") and node.get("aspect"):
+                results.append({"aspect": node["aspect"], "answer": node["answer"]})
+            for child in node.get("children", []):
+                results.extend(_collect_answered_dict(child))
+            return results
+        answered = _collect_answered_dict(tree)
+        aspects_text = "\n".join(f"- {a['aspect']}: {a['answer']}" for a in answered) or "None yet."
+        system = PANEL_PATCH_SYSTEM.format(existing_plan=existing_plan, answered_aspects=aspects_text)
+        prompt = (
+            f"Objective: {objective}\n\n"
+            "Generate plan_patches now. Return {{\"plan_patches\": [...]}} — empty list if no changes needed."
+        )
+        raw = _generate_text(system, prompt, temperature=0.3, max_tokens=2048)
+        try:
+            data = _extract_json(raw)
+            patches = data.get("plan_patches") or []
+        except Exception:
+            patches = []
+        return {"tabs": [], "plan_patches": patches}
+
+    # --- Full generation: no existing plan ---
     tree_text = _tree_to_text(tree)
 
     bg_lines = []
@@ -391,10 +438,9 @@ def generate_panel_tabs(objective: str, mode: str, background: dict, tree: dict,
     if title:
         plan_data["title"] = title
 
-    import json as _json
     content = _json.dumps(plan_data)
 
-    return [{"id": "overview", "title": "Plan", "content": content}]
+    return {"tabs": [{"id": "overview", "title": "Plan", "content": content}], "plan_patches": None}
 
 
 PLAN_CHAT_BASE = """You are Midwife, a planning assistant. The user is chatting specifically about their plan.

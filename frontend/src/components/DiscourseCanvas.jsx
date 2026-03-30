@@ -1273,6 +1273,7 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
       setChatThreads(prev => [...prev, thread]);
     }
     setActiveChatThreadId(thread.id);
+    setChatContextNodeId(node.id);
     setChatOpen(true);
     setInterviewPaused(true);
   }
@@ -1307,12 +1308,23 @@ export default function DiscourseCanvas({ sessionId, tree, setTree, objective, d
     setPlanStale(false);
     setRightPanelOpen(true);
     try {
-      const { tabs } = await generatePanelTabs(sessionId);
-      // Only update if at least one tab has real content
-      if (tabs.some(t => t.content?.trim())) {
-        setPanelTabs(tabs);
-        if (tabs.length > 0) setActivePanelTabId(tabs[0].id);
+      const existingPlan = panelTabs?.[0]?.content || null;
+      const result = await generatePanelTabs(sessionId, existingPlan);
+
+      if (result.plan_patches?.length > 0 && existingPlan) {
+        // Subsequent round — show diff for approval using existing infrastructure
+        try {
+          const currentPlan = JSON.parse(existingPlan);
+          if (currentPlan?.sections) {
+            setProposedPlan(applyPatchesForDiff(currentPlan, result.plan_patches));
+          }
+        } catch {}
+      } else if (result.tabs?.some(t => t.content?.trim())) {
+        // First time — set directly, nothing to diff against
+        setPanelTabs(result.tabs);
+        if (result.tabs.length > 0) setActivePanelTabId(result.tabs[0].id);
       }
+      // Empty patches [] → nothing new, plan stays as-is
     } catch (err) {
       setApiError(err.message);
     } finally {

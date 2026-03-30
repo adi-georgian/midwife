@@ -125,8 +125,13 @@ class PanelTab(BaseModel):
     content: str
 
 
+class GeneratePanelRequest(BaseModel):
+    existing_plan: str | None = None
+
+
 class GeneratePanelResponse(BaseModel):
-    tabs: list[PanelTab]
+    tabs: list[PanelTab] = []
+    plan_patches: list | None = None
 
 
 class TabContext(BaseModel):
