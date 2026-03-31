@@ -32,9 +32,13 @@ The name is a tribute to Plato's concept of *maieutics*: just as a midwife helps
 
 ## Screenshots
 
-| Interview Flow | Plan Refinement |
-|---|---|
-| ![Interview in progress showing a Socratic question with suggestion chips](docs/project_report/figures/interview.png) | ![Plan pane showing mode-specific tabs and a diff preview of proposed edits](docs/project_report/figures/usage.png) |
+**Interview Flow**
+
+![Interview in progress showing a Socratic question with suggestion chips](docs/project_report/figures/interview.png)
+
+**Plan Refinement**
+
+![Plan pane showing mode-specific tabs and a diff preview of proposed edits](docs/project_report/figures/usage.png)
 
 ---
 
