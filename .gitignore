@@ -8,6 +8,8 @@ docs/project_report/*
 !docs/project_report/midwife.tex
 !docs/project_report/midwife.bib
 !docs/project_report/midwife.pdf
+!docs/project_report/figures/
+!docs/project_report/figures/*
 
 # DS Store
 .DS_Store
