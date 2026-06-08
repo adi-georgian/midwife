@@ -8,6 +8,33 @@ async function apiFetch(url, options = {}) {
   return res.json();
 }
 
+export async function getMe() {
+  return apiFetch("/me");
+}
+
+export async function listSessions() {
+  return apiFetch("/sessions");
+}
+
+export async function getSessionState(sessionId) {
+  return apiFetch(`/session/${sessionId}/state`);
+}
+
+export async function deleteSession(sessionId) {
+  return apiFetch(`/session/${sessionId}`, { method: "DELETE" });
+}
+
+export async function saveViewState(sessionId, { panelTabs, discourseFinished } = {}) {
+  const body = {};
+  if (panelTabs !== undefined) body.panel_tabs = panelTabs;
+  if (discourseFinished !== undefined) body.discourse_finished = discourseFinished;
+  return apiFetch(`/session/${sessionId}/view-state`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 export async function createSession(objective, background = {}) {
   return apiFetch("/session", {
     method: "POST",

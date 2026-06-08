@@ -174,3 +174,9 @@ cython_debug/
 
 # Session data
 backend/sessions/
+
+# Local self-improvement logbook (private working memory)
+.learnings/
+
+# Local development database (SQLite) — never committed
+backend/*.db

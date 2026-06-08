@@ -13,7 +13,26 @@ from google.genai.errors import ClientError, ServerError
 
 load_dotenv()
 
-client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+# --- LLM provider configuration -------------------------------------------------
+# For the internal/sensitive deployment we route BOTH models through GCP Vertex AI,
+# so canvas content stays inside Georgian's own GCP project (see docs/adr/0001).
+# Setting ANTHROPIC_VERTEX_PROJECT_ID switches everything to Vertex. Without it we
+# fall back to the public API keys, which is convenient for local development.
+# Either way, missing keys no longer crash startup — the relevant client is just
+# left as None and that provider is skipped.
+_vertex_project = os.environ.get("ANTHROPIC_VERTEX_PROJECT_ID")
+_vertex_region = os.environ.get("CLOUD_ML_REGION", "us-east5")
+
+if _vertex_project:
+    # Gemini fallback via Vertex too, so no content reaches the public APIs.
+    client = genai.Client(
+        vertexai=True,
+        project=_vertex_project,
+        location=os.environ.get("GEMINI_VERTEX_REGION", "us-central1"),
+    )
+else:
+    _gemini_key = os.environ.get("GEMINI_API_KEY")
+    client = genai.Client(api_key=_gemini_key) if _gemini_key else None
 
 
 def _trunc(text: str, max_chars: int = 120) -> str:
@@ -59,9 +78,16 @@ GEMINI_MODELS = [
     "gemini-3.1-flash-lite-preview",
 ]
 
-_anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
-anthropic_client = _anthropic.Anthropic(api_key=_anthropic_key) if _anthropic_key else None
-CLAUDE_MODEL = "claude-haiku-4-5-20251001"
+if _vertex_project:
+    from anthropic import AnthropicVertex
+    anthropic_client = AnthropicVertex(project_id=_vertex_project, region=_vertex_region)
+    # On Vertex, Claude model IDs may carry an @version suffix — override CLAUDE_MODEL
+    # in the environment if Vertex requires the fully-qualified id.
+    CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
+else:
+    _anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    anthropic_client = _anthropic.Anthropic(api_key=_anthropic_key) if _anthropic_key else None
+    CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
 
 
 def _call_claude_with_retry(fn, max_attempts=3):
@@ -118,22 +144,23 @@ def _generate_text(system: str, prompt_or_messages, temperature: float = 0.7, ma
         except Exception as e:
             logger.warning("Claude %s failed: %s — falling back to Gemini", CLAUDE_MODEL, e)
 
-    for model in GEMINI_MODELS:
-        try:
-            gemini_config = types.GenerateContentConfig(
-                system_instruction=system,
-                temperature=temperature,
-                **({"response_mime_type": "application/json", "response_schema": response_schema}
-                   if response_schema else {}),
-            )
-            return client.models.generate_content(
-                model=model,
-                contents=gemini_contents,
-                config=gemini_config,
-            ).text.strip()
-        except (ClientError, ServerError) as e:
-            logger.warning("Gemini model %s failed: %s", model, e)
-            continue
+    if client is not None:
+        for model in GEMINI_MODELS:
+            try:
+                gemini_config = types.GenerateContentConfig(
+                    system_instruction=system,
+                    temperature=temperature,
+                    **({"response_mime_type": "application/json", "response_schema": response_schema}
+                       if response_schema else {}),
+                )
+                return client.models.generate_content(
+                    model=model,
+                    contents=gemini_contents,
+                    config=gemini_config,
+                ).text.strip()
+            except (ClientError, ServerError) as e:
+                logger.warning("Gemini model %s failed: %s", model, e)
+                continue
 
     raise RuntimeError("All models failed (Claude and all Gemini fallbacks).")
 

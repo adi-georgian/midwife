@@ -153,7 +153,7 @@ function ContextQuestion({ question, value, onChange }) {
   return null;
 }
 
-export default function Landing({ onStart, disabled = false, error = null, sessions = [], onResume, onDeleteSession, onClearAllSessions, theme = "sepia", onToggleTheme }) {
+export default function Landing({ onStart, disabled = false, error = null, sessions = [], onResume, onDeleteSession, onClearAllSessions, theme = "sepia", onToggleTheme, userEmail = "" }) {
   const [text, setText] = useState("");
   const [step, setStep] = useState("objective"); // "objective" | "mode" | "context"
   const [modes, setModes] = useState([]);
@@ -271,6 +271,7 @@ export default function Landing({ onStart, disabled = false, error = null, sessi
       <div className="landing">
       <h1>midWife</h1>
       <p className="landing-tagline">helping give birth to your plans</p>
+      {userEmail && <p className="landing-user">Signed in as {userEmail}</p>}
       {error && <p className="landing-error">{error}</p>}
 
       <form onSubmit={handleSubmit} className="landing-form">

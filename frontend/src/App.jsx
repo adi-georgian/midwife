@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import Landing from "./components/Landing";
 import DiscourseCanvas from "./components/DiscourseCanvas";
 import GuideWindow from "./components/GuideWindow";
-import { createSession, generateBriefing, generateBriefingCycle, sendBriefingChat, addAspect, deleteAspect, updateAspect } from "./api";
+import { createSession, generateBriefing, generateBriefingCycle, sendBriefingChat, addAspect, deleteAspect, updateAspect, getMe, listSessions, getSessionState, deleteSession, saveViewState } from "./api";
 import { toTitleCase } from "./utils";
 
 function LoadingCanvas({ objective }) {
@@ -28,6 +28,7 @@ export default function App() {
   const [startError, setStartError] = useState(null);
   const [discourseTitle, setDiscourseTitle] = useState("");
   const [sessions, setSessions] = useState([]);
+  const [userEmail, setUserEmail] = useState("");
   const [background, setBackground] = useState({});
 
   // Briefing (Guide Window) state
@@ -49,28 +50,44 @@ export default function App() {
     setTheme(t => t === "dark" ? "sepia" : "dark");
   }
 
+  // On load, the server is the source of truth for which canvases are *yours*.
+  // The browser's localStorage is kept only as a cache of rich view-state (the tree
+  // thumbnail, plan tabs, etc.) so that resuming on the same machine is instant.
   useEffect(() => {
-    const raw = localStorage.getItem("midwife_sessions");
-    if (raw) {
-      try { setSessions(JSON.parse(raw)); } catch {}
-    } else {
-      // Migrate old single-session key
-      const old = localStorage.getItem("midwife_session");
-      if (old) {
-        try {
-          const parsed = JSON.parse(old);
-          const entry = {
-            ...parsed,
-            discourseName: parsed.objective?.split(" ").slice(0, 4).join(" ") || "",
-            mode: "",
-          };
-          const next = [entry];
-          localStorage.setItem("midwife_sessions", JSON.stringify(next));
-          localStorage.removeItem("midwife_session");
-          setSessions(next);
-        } catch {}
-      }
-    }
+    let cancelled = false;
+
+    let cache = [];
+    try { cache = JSON.parse(localStorage.getItem("midwife_sessions") || "[]"); } catch {}
+    const cacheById = Object.fromEntries(cache.map(s => [s.sessionId, s]));
+
+    getMe().then(d => { if (!cancelled) setUserEmail(d.email); }).catch(() => {});
+
+    listSessions().then(({ sessions: server }) => {
+      if (cancelled) return;
+      const merged = (server || []).map(s => {
+        const cached = cacheById[s.session_id];
+        const savedAt = s.updated_at ? new Date(s.updated_at).getTime() : (cached?.savedAt || Date.now());
+        return {
+          sessionId: s.session_id,
+          objective: s.objective,
+          discourseName: s.discourse_name || cached?.discourseName || "",
+          savedAt,
+          // Rich fields from the local cache (absent → resume fetches from server).
+          tree: cached?.tree || null,
+          background: cached?.background,
+          panelTabs: cached?.panelTabs,
+          discourseFinished: cached?.discourseFinished,
+          mode: cached?.mode,
+        };
+      });
+      setSessions(merged);
+    }).catch(() => {
+      // Backend unreachable (e.g. running without API keys) — fall back to the
+      // local cache so local development isn't blocked.
+      if (!cancelled) setSessions(cache);
+    });
+
+    return () => { cancelled = true; };
   }, []);
 
   function upsertSession(patch) {
@@ -86,24 +103,52 @@ export default function App() {
       localStorage.setItem("midwife_sessions", JSON.stringify(next));
       return next;
     });
+    // Persist view-state (plan tabs / finished flag) to the server too, so the whole
+    // canvas — not just its question tree — follows the user across devices.
+    if (patch.sessionId && ("panelTabs" in patch || "discourseFinished" in patch)) {
+      saveViewState(patch.sessionId, {
+        ...("panelTabs" in patch ? { panelTabs: patch.panelTabs } : {}),
+        ...("discourseFinished" in patch ? { discourseFinished: patch.discourseFinished } : {}),
+      }).catch(() => {});
+    }
   }
 
   const [resumePanelTabs, setResumePanelTabs] = useState(null);
   const [resumeDiscourseFinished, setResumeDiscourseFinished] = useState(false);
 
-  function handleResumeSession(entry) {
-    setSessionId(entry.sessionId);
-    setObjective(entry.objective);
-    setDiscourseTitle(entry.discourseName || entry.objective);
-    setTree(entry.tree);
-    setBackground(entry.background || {});
-    setResumePanelTabs(entry.panelTabs || null);
-    setResumeDiscourseFinished(entry.discourseFinished || false);
+  async function handleResumeSession(entry) {
+    let data = entry;
+    // If this browser doesn't have the canvas cached, load it from the server.
+    if (!entry.tree) {
+      try {
+        const s = await getSessionState(entry.sessionId);
+        data = {
+          ...entry,
+          objective: s.objective,
+          discourseName: s.discourse_name || entry.discourseName,
+          tree: s.root,
+          background: s.background || {},
+          panelTabs: (s.panel_tabs && s.panel_tabs.length) ? s.panel_tabs : entry.panelTabs,
+          discourseFinished: s.discourse_finished ?? entry.discourseFinished,
+        };
+      } catch {
+        setStartError("Couldn't load that canvas. Please try again.");
+        return;
+      }
+    }
+    setSessionId(data.sessionId);
+    setObjective(data.objective);
+    setDiscourseTitle(data.discourseName || data.objective);
+    setTree(data.tree);
+    setBackground(data.background || {});
+    setResumePanelTabs(data.panelTabs || null);
+    setResumeDiscourseFinished(data.discourseFinished || false);
     setDiscourseReady(true);
     setView("discourse");
   }
 
   function handleDeleteSession(sessionId) {
+    deleteSession(sessionId).catch(() => {});  // remove server-side too
     setSessions(prev => {
       const next = prev.filter(s => s.sessionId !== sessionId);
       localStorage.setItem("midwife_sessions", JSON.stringify(next));
@@ -112,6 +157,8 @@ export default function App() {
   }
 
   function handleClearAllSessions() {
+    if (!window.confirm("Delete all of your canvases? This cannot be undone.")) return;
+    sessions.forEach(s => deleteSession(s.sessionId).catch(() => {}));
     setSessions([]);
     localStorage.removeItem("midwife_sessions");
   }
@@ -299,6 +346,7 @@ export default function App() {
         onClearAllSessions={handleClearAllSessions}
         theme={theme}
         onToggleTheme={toggleTheme}
+        userEmail={userEmail}
       />
     );
   }
