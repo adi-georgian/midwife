@@ -1,0 +1,12 @@
+# Keep the build context small and avoid copying local-only state into the image.
+.git
+.venv
+__pycache__
+*.pyc
+frontend/node_modules
+frontend/dist
+backend/sessions
+backend/*.db
+.learnings
+.env
+docs/project_report

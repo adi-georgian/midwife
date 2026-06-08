@@ -1,10 +1,15 @@
 import asyncio
+import os
 import uuid
+from pathlib import Path
 
 import anthropic as _anthropic
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 from google.genai.errors import ClientError, ServerError
 from fastapi.middleware.cors import CORSMiddleware
+
+from backend.auth import get_current_user
 
 from backend.interview import generate_aspect_description, generate_briefing, generate_briefing_chat_update, generate_briefing_cycle, generate_chat_label, generate_chat_reply, generate_discourse_name, generate_panel_tabs, generate_questions, recontextualize_ancestors
 from backend.models import (
@@ -35,19 +40,83 @@ from backend.models import (
     RevealResponse,
     SessionState,
     TreeResponse,
+    ViewStateRequest,
 )
 from backend.session import SessionStore
 
 app = FastAPI()
 
+# Allowed browser origins. Defaults to the local dev frontend; set CORS_ALLOW_ORIGINS
+# (comma-separated) in other environments. When the frontend is served by this same
+# app (single-service production), requests are same-origin and CORS isn't needed.
+_cors_origins = [o.strip() for o in os.environ.get("CORS_ALLOW_ORIGINS", "http://localhost:5173").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 store = SessionStore()
+
+
+@app.get("/healthz")
+async def healthz():
+    """Unauthenticated liveness check for the host's health probe."""
+    return {"status": "ok"}
+
+
+@app.get("/me")
+async def me(user: str = Depends(get_current_user)):
+    """Return who the caller is. The frontend uses this to show 'signed in as…'."""
+    return {"email": user}
+
+
+@app.get("/sessions")
+async def list_sessions(user: str = Depends(get_current_user)):
+    """List the canvases owned by the current user (newest first)."""
+    return {"sessions": store.list_sessions(user)}
+
+
+@app.get("/session/{session_id}/state")
+async def get_session_state(session_id: str, user: str = Depends(get_current_user)):
+    """Return one canvas's full saved state (used to resume on any device)."""
+    session = store.get_session(session_id, user)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {
+        "session_id": session.session_id,
+        "objective": session.objective,
+        "mode": session.mode,
+        "background": session.background,
+        "discourse_name": session.discourse_name,
+        "root": session.root,
+        "panel_tabs": session.panel_tabs,
+        "discourse_finished": session.discourse_finished,
+    }
+
+
+@app.post("/session/{session_id}/view-state")
+async def save_view_state(session_id: str, request: ViewStateRequest, user: str = Depends(get_current_user)):
+    """Persist a canvas's view-state (plan/panel tabs, finished flag) so it follows
+    the user across devices. Only the provided fields are updated."""
+    session = store.get_session(session_id, user)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if request.panel_tabs is not None:
+        session.panel_tabs = request.panel_tabs
+    if request.discourse_finished is not None:
+        session.discourse_finished = request.discourse_finished
+    store.save_session(session, user)
+    return {"status": "ok"}
+
+
+@app.delete("/session/{session_id}")
+async def delete_session(session_id: str, user: str = Depends(get_current_user)):
+    """Permanently delete one of the current user's canvases."""
+    if not store.delete_session(session_id, user):
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"status": "ok"}
 
 
 def collect_answered_aspects(node: AspectNode) -> list[dict]:
@@ -71,7 +140,7 @@ def collect_aspects(node: AspectNode, exclude_ids: set[str] | None = None) -> li
 
 
 @app.post("/session", response_model=CreateSessionResponse)
-async def create_session(request: CreateSessionRequest):
+async def create_session(request: CreateSessionRequest, user: str = Depends(get_current_user)):
     try:
         session_id = str(uuid.uuid4())
 
@@ -115,11 +184,11 @@ async def create_session(request: CreateSessionRequest):
             background=background if has_background else {},
             root=root,
         )
-        store.create_session(session)
+        store.create_session(session, user)
 
         discourse_name = generate_discourse_name(request.objective)
         session.discourse_name = discourse_name
-        store.save_session(session)
+        store.save_session(session, user)
         return CreateSessionResponse(session_id=session_id, aspects=aspects, discourse_name=discourse_name)
     except (ServerError, ClientError, _anthropic.APIStatusError, RuntimeError) as e:
         raise HTTPException(status_code=503, detail="AI service is currently overloaded. Please try again in a moment.")
@@ -129,9 +198,9 @@ async def create_session(request: CreateSessionRequest):
 
 @app.post("/session/{session_id}/answer/{aspect_id}")
 async def answer_aspect(
-    session_id: str, aspect_id: str, request: AnswerRequest
+    session_id: str, aspect_id: str, request: AnswerRequest, user: str = Depends(get_current_user)
 ):
-    session = store.get_session(session_id)
+    session = store.get_session(session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -140,7 +209,7 @@ async def answer_aspect(
         raise HTTPException(status_code=404, detail="Aspect not found")
 
     node.answer = request.answer
-    store.save_session(session)
+    store.save_session(session, user)
     return {"status": "ok", "aspect_id": aspect_id, "answer": request.answer}
 
 
@@ -148,8 +217,8 @@ async def answer_aspect(
     "/session/{session_id}/elaborate/{aspect_id}",
     response_model=ElaborateResponse,
 )
-async def elaborate_aspect(session_id: str, aspect_id: str):
-    session = store.get_session(session_id)
+async def elaborate_aspect(session_id: str, aspect_id: str, user: str = Depends(get_current_user)):
+    session = store.get_session(session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -198,14 +267,14 @@ async def elaborate_aspect(session_id: str, aspect_id: str):
     ]
 
     target_node.children.extend(new_nodes)
-    store.save_session(session)
+    store.save_session(session, user)
 
     return ElaborateResponse(aspects=new_nodes)
 
 
 @app.post("/session/{session_id}/add-aspect/{parent_id}")
-async def add_aspect(session_id: str, parent_id: str, request: AddAspectRequest):
-    session = store.get_session(session_id)
+async def add_aspect(session_id: str, parent_id: str, request: AddAspectRequest, user: str = Depends(get_current_user)):
+    session = store.get_session(session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -243,14 +312,14 @@ async def add_aspect(session_id: str, parent_id: str, request: AddAspectRequest)
         suggestions=suggestions,
     )
     parent.children.append(new_node)
-    store.save_session(session)
+    store.save_session(session, user)
 
     return {"aspect": new_node.model_dump()}
 
 
 @app.post("/session/{session_id}/generate-aspects/{parent_id}")
-async def generate_aspects_for_label(session_id: str, parent_id: str, request: GenerateAspectsRequest):
-    session = store.get_session(session_id)
+async def generate_aspects_for_label(session_id: str, parent_id: str, request: GenerateAspectsRequest, user: str = Depends(get_current_user)):
+    session = store.get_session(session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -288,9 +357,9 @@ async def generate_aspects_for_label(session_id: str, parent_id: str, request: G
 
 
 @app.post("/session/{session_id}/generate-question")
-async def generate_question_for_aspect(session_id: str, request: GenerateAspectsRequest):
+async def generate_question_for_aspect(session_id: str, request: GenerateAspectsRequest, user: str = Depends(get_current_user)):
     """Generate a single Socratic question for a named aspect given an optional description."""
-    session = store.get_session(session_id)
+    session = store.get_session(session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     try:
@@ -313,8 +382,8 @@ async def generate_question_for_aspect(session_id: str, request: GenerateAspects
 
 
 @app.get("/session/{session_id}/tree", response_model=TreeResponse)
-async def get_tree(session_id: str):
-    session = store.get_session(session_id)
+async def get_tree(session_id: str, user: str = Depends(get_current_user)):
+    session = store.get_session(session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -326,8 +395,8 @@ async def get_tree(session_id: str):
 
 
 @app.post("/session/{session_id}/prefetch", response_model=PrefetchResponse)
-async def prefetch_children(session_id: str, request: PrefetchRequest):
-    session = store.get_session(session_id)
+async def prefetch_children(session_id: str, request: PrefetchRequest, user: str = Depends(get_current_user)):
+    session = store.get_session(session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -371,13 +440,13 @@ async def prefetch_children(session_id: str, request: PrefetchRequest):
 
         target_node.children.extend(ghost_nodes)
 
-    store.save_session(session)
+    store.save_session(session, user)
     return PrefetchResponse(status="ok")
 
 
 @app.post("/session/{session_id}/chat", response_model=ChatResponse)
-async def chat(session_id: str, request: ChatRequest):
-    session = store.get_session(session_id)
+async def chat(session_id: str, request: ChatRequest, user: str = Depends(get_current_user)):
+    session = store.get_session(session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     try:
@@ -408,10 +477,10 @@ async def chat(session_id: str, request: ChatRequest):
 
 
 @app.post("/session/{session_id}/generate-panel", response_model=GeneratePanelResponse)
-async def generate_panel(session_id: str, request: GeneratePanelRequest = None):
+async def generate_panel(session_id: str, request: GeneratePanelRequest = None, user: str = Depends(get_current_user)):
     if request is None:
         request = GeneratePanelRequest()
-    session = store.get_session(session_id)
+    session = store.get_session(session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     try:
@@ -432,21 +501,21 @@ async def generate_panel(session_id: str, request: GeneratePanelRequest = None):
 
 
 @app.delete("/session/{session_id}/aspect/{aspect_id}")
-async def delete_aspect(session_id: str, aspect_id: str):
-    session = store.get_session(session_id)
+async def delete_aspect(session_id: str, aspect_id: str, user: str = Depends(get_current_user)):
+    session = store.get_session(session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     parent = session.find_parent(aspect_id)
     if not parent:
         raise HTTPException(status_code=404, detail="Aspect not found or cannot delete root")
     parent.children = [c for c in parent.children if c.id != aspect_id]
-    store.save_session(session)
+    store.save_session(session, user)
     return {"status": "ok"}
 
 
 @app.patch("/session/{session_id}/aspect/{aspect_id}")
-async def update_aspect(session_id: str, aspect_id: str, request: UpdateAspectRequest):
-    session = store.get_session(session_id)
+async def update_aspect(session_id: str, aspect_id: str, request: UpdateAspectRequest, user: str = Depends(get_current_user)):
+    session = store.get_session(session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     node = session.find_node(aspect_id)
@@ -458,13 +527,13 @@ async def update_aspect(session_id: str, aspect_id: str, request: UpdateAspectRe
         node.answer = request.answer.strip() or None
     if request.question is not None:
         node.question = request.question.strip()
-    store.save_session(session)
+    store.save_session(session, user)
     return {"ok": True}
 
 
 @app.post("/session/{session_id}/move-aspect/{aspect_id}")
-async def move_aspect(session_id: str, aspect_id: str, request: MoveAspectRequest):
-    session = store.get_session(session_id)
+async def move_aspect(session_id: str, aspect_id: str, request: MoveAspectRequest, user: str = Depends(get_current_user)):
+    session = store.get_session(session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     node = session.find_node(aspect_id)
@@ -478,13 +547,13 @@ async def move_aspect(session_id: str, aspect_id: str, request: MoveAspectReques
         raise HTTPException(status_code=404, detail="Target parent not found")
     old_parent.children = [c for c in old_parent.children if c.id != aspect_id]
     new_parent.children.append(node)
-    store.save_session(session)
+    store.save_session(session, user)
     return {"status": "ok"}
 
 
 @app.post("/session/{session_id}/recontextualize/{aspect_id}", response_model=RecontextualizeResponse)
-async def recontextualize(session_id: str, aspect_id: str):
-    session = store.get_session(session_id)
+async def recontextualize(session_id: str, aspect_id: str, user: str = Depends(get_current_user)):
+    session = store.get_session(session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -518,7 +587,7 @@ async def recontextualize(session_id: str, aspect_id: str):
         node = session.find_node(update["id"])
         if node:
             node.aspect = update["new_aspect"]
-    store.save_session(session)
+    store.save_session(session, user)
 
     return RecontextualizeResponse(
         updated_ancestors=result.get("updated_ancestors", []),
@@ -527,7 +596,7 @@ async def recontextualize(session_id: str, aspect_id: str):
 
 
 @app.post("/label-chat")
-async def label_chat_endpoint(request: LabelChatRequest):
+async def label_chat_endpoint(request: LabelChatRequest, user: str = Depends(get_current_user)):
     try:
         label = generate_chat_label([m.model_dump() for m in request.messages])
         return {"label": label}
@@ -536,8 +605,8 @@ async def label_chat_endpoint(request: LabelChatRequest):
 
 
 @app.post("/session/{session_id}/reveal/{aspect_id}", response_model=RevealResponse)
-async def reveal_children(session_id: str, aspect_id: str):
-    session = store.get_session(session_id)
+async def reveal_children(session_id: str, aspect_id: str, user: str = Depends(get_current_user)):
+    session = store.get_session(session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -548,13 +617,13 @@ async def reveal_children(session_id: str, aspect_id: str):
     for child in node.children:
         child.is_ghost = False
 
-    store.save_session(session)
+    store.save_session(session, user)
     return RevealResponse(children=node.children)
 
 
 @app.post("/session/{session_id}/briefing", response_model=BriefingResponse)
-async def get_briefing(session_id: str):
-    session = store.get_session(session_id)
+async def get_briefing(session_id: str, user: str = Depends(get_current_user)):
+    session = store.get_session(session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     try:
@@ -570,8 +639,8 @@ async def get_briefing(session_id: str):
 
 
 @app.post("/session/{session_id}/briefing-chat", response_model=BriefingChatResponse)
-async def briefing_chat(session_id: str, request: BriefingChatRequest):
-    session = store.get_session(session_id)
+async def briefing_chat(session_id: str, request: BriefingChatRequest, user: str = Depends(get_current_user)):
+    session = store.get_session(session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     try:
@@ -591,8 +660,8 @@ async def briefing_chat(session_id: str, request: BriefingChatRequest):
 
 
 @app.post("/session/{session_id}/briefing-cycle", response_model=BriefingCycleResponse)
-async def briefing_cycle(session_id: str):
-    session = store.get_session(session_id)
+async def briefing_cycle(session_id: str, user: str = Depends(get_current_user)):
+    session = store.get_session(session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     try:
@@ -602,3 +671,11 @@ async def briefing_cycle(session_id: str):
         return BriefingCycleResponse(aspects=aspects)
     except (ClientError, ServerError, _anthropic.APIStatusError, RuntimeError):
         raise HTTPException(status_code=503, detail="AI service is currently overloaded. Please try again in a moment.")
+
+
+# In production we serve the built frontend from this same app (one service for both
+# API and UI). The mount goes LAST so it never shadows the API routes above. It's only
+# active if a build exists — in local dev the Vite dev server serves the frontend instead.
+_frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if _frontend_dist.is_dir():
+    app.mount("/", StaticFiles(directory=_frontend_dist, html=True), name="frontend")

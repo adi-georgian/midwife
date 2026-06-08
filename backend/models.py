@@ -27,6 +27,9 @@ class SessionState(BaseModel):
     background: dict = {}
     root: AspectNode
     discourse_name: str = ""
+    # View-state persisted server-side so a canvas fully restores on any device:
+    panel_tabs: list = []          # the generated plan/panel tabs [{id,title,content}]
+    discourse_finished: bool = False
 
     def find_node(self, node_id: str) -> AspectNode | None:
         return self._find_node(self.root, node_id)
@@ -166,6 +169,11 @@ class AddAspectRequest(BaseModel):
 
 class MoveAspectRequest(BaseModel):
     new_parent_id: str
+
+
+class ViewStateRequest(BaseModel):
+    panel_tabs: list | None = None
+    discourse_finished: bool | None = None
 
 
 class GenerateAspectsRequest(BaseModel):
