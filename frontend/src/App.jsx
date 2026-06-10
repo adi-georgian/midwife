@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import Landing from "./components/Landing";
 import DiscourseCanvas from "./components/DiscourseCanvas";
 import GuideWindow from "./components/GuideWindow";
-import { createSession, generateBriefing, generateBriefingCycle, sendBriefingChat, addAspect, deleteAspect, updateAspect, getMe, listSessions, getSessionState, deleteSession, saveViewState } from "./api";
+import { useAuth, useUser } from "@clerk/clerk-react";
+import { createSession, generateBriefing, generateBriefingCycle, sendBriefingChat, addAspect, deleteAspect, updateAspect, setTokenGetter, listSessions, getSessionState, deleteSession, saveViewState } from "./api";
 import { toTitleCase } from "./utils";
 
 function LoadingCanvas({ objective }) {
@@ -30,6 +31,15 @@ export default function App() {
   const [sessions, setSessions] = useState([]);
   const [userEmail, setUserEmail] = useState("");
   const [background, setBackground] = useState({});
+
+  // Clerk identity: register the token getter so api.js can authenticate requests,
+  // and surface the signed-in user's email for display.
+  const { getToken } = useAuth();
+  setTokenGetter(getToken);
+  const { user: clerkUser } = useUser();
+  useEffect(() => {
+    setUserEmail(clerkUser?.primaryEmailAddress?.emailAddress || "");
+  }, [clerkUser]);
 
   // Briefing (Guide Window) state
   const [briefingOpen, setBriefingOpen] = useState(false);
@@ -59,8 +69,6 @@ export default function App() {
     let cache = [];
     try { cache = JSON.parse(localStorage.getItem("midwife_sessions") || "[]"); } catch {}
     const cacheById = Object.fromEntries(cache.map(s => [s.sessionId, s]));
-
-    getMe().then(d => { if (!cancelled) setUserEmail(d.email); }).catch(() => {});
 
     listSessions().then(({ sessions: server }) => {
       if (cancelled) return;

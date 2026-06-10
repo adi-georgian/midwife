@@ -1,31 +1,61 @@
 """Who is the current user?
 
 This is the single place the rest of the app asks "who is making this request?".
-Every route depends on `get_current_user`, and it returns the user's email. That
-email is what we stamp onto a Canvas as its owner, and what we check against when
-someone tries to read or change a Canvas.
+Every route depends on `get_current_user`, and it returns a stable identifier for the
+caller. That identifier is what we stamp onto a Canvas as its owner and check against
+when someone tries to read or change a Canvas.
 
-RIGHT NOW (development): there is no real login yet. We use a *pretend* user so we
-can build and test ownership locally. The pretend email is:
-  - whatever the `X-Dev-User-Email` request header says (handy for testing as two
-    different people), or
-  - the `DEV_USER_EMAIL` environment variable, or
-  - a default of "you@georgian.io".
+Two modes, chosen by environment:
 
-LATER (production): this function is the ONLY thing that changes. It will instead
-read the signed identity that the login layer (e.g. Google Cloud IAP, or Okta)
-attaches to every request, verify it, and return that real email. No other code
-needs to change. See docs/adr/0002-auth-via-iap-workspace.md.
+- **Production (Clerk configured):** if `CLERK_JWT_ISSUER` is set, every request must carry
+  a valid Clerk session token (`Authorization: Bearer <token>`). We verify the token's
+  signature against Clerk's public keys (JWKS) and return the Clerk user id (`sub`) as the
+  owner. Invalid/missing token → 401.
+
+- **Local dev (no Clerk):** if `CLERK_JWT_ISSUER` is unset, we use a *pretend* user
+  (`X-Dev-User-Email` header or `DEV_USER_EMAIL`, default "you@georgian.io"), so the app
+  can run and be tested without standing up real auth.
 """
 
 import os
 
-from fastapi import Header
+from dotenv import load_dotenv
+from fastapi import Header, HTTPException
+
+load_dotenv()  # load .env before reading config (auth is imported before interview)
 
 DEV_USER_EMAIL = os.environ.get("DEV_USER_EMAIL", "you@georgian.io")
+CLERK_JWT_ISSUER = os.environ.get("CLERK_JWT_ISSUER")  # e.g. https://<app>.clerk.accounts.dev
+
+_jwks_client = None
+if CLERK_JWT_ISSUER:
+    import jwt
+    from jwt import PyJWKClient
+
+    _jwks_client = PyJWKClient(f"{CLERK_JWT_ISSUER.rstrip('/')}/.well-known/jwks.json")
 
 
-def get_current_user(x_dev_user_email: str | None = Header(default=None)) -> str:
-    # DEV ONLY — replace the body of this function with real identity verification
-    # in production. The function signature / return type stays the same.
+def get_current_user(
+    authorization: str | None = Header(default=None),
+    x_dev_user_email: str | None = Header(default=None),
+) -> str:
+    if CLERK_JWT_ISSUER:
+        # Production: require a valid Clerk session token.
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        token = authorization.split(" ", 1)[1]
+        try:
+            signing_key = _jwks_client.get_signing_key_from_jwt(token)
+            claims = jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=["RS256"],
+                issuer=CLERK_JWT_ISSUER,
+                options={"verify_aud": False},  # Clerk session tokens carry no audience
+            )
+        except Exception:
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+        return claims["sub"]  # stable Clerk user id → the Canvas owner
+
+    # Local dev: no Clerk configured — pretend user.
     return x_dev_user_email or DEV_USER_EMAIL

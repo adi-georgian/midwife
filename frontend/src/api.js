@@ -1,5 +1,17 @@
+// The backend identifies the user from the Clerk session token. App registers a getter
+// (Clerk's useAuth().getToken) here so these plain functions can attach it to requests.
+let _getToken = null;
+export function setTokenGetter(fn) { _getToken = fn; }
+
 async function apiFetch(url, options = {}) {
-  const res = await fetch(url, options);
+  const headers = { ...(options.headers || {}) };
+  if (_getToken) {
+    try {
+      const token = await _getToken();
+      if (token) headers.Authorization = `Bearer ${token}`;
+    } catch { /* not signed in yet — request proceeds and backend will 401 if required */ }
+  }
+  const res = await fetch(url, { ...options, headers });
   if (!res.ok) {
     let detail = `Request failed (${res.status})`;
     try { detail = (await res.json()).detail || detail; } catch {}
