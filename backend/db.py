@@ -30,6 +30,12 @@ from sqlalchemy import (
 _DEFAULT_SQLITE_PATH = Path(__file__).parent / "midwife.db"
 DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{_DEFAULT_SQLITE_PATH}")
 
+# Managed Postgres providers (Render, Heroku, ...) hand out the legacy "postgres://"
+# scheme, but SQLAlchemy needs "postgresql://". Normalize it so the same code works
+# locally (SQLite) and in production (Postgres).
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 # SQLite needs this flag so the connection can be reused across request threads;
 # it is harmless and ignored for PostgreSQL.
 _connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
