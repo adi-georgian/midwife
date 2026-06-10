@@ -1421,6 +1421,36 @@ body.theme-dark .discourse-node__desc {
   color: var(--text-1);
 }
 
+/* Clerk user button (account / sign out), top-right next to the theme toggle */
+.landing-user-btn {
+  position: fixed;
+  top: 14px;
+  right: 60px;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+}
+
+/* Signed-out gate: center Clerk's sign-in card */
+.auth-gate {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+}
+.auth-gate__brand {
+  margin: 0;
+  font-size: 2rem;
+}
+.auth-gate__tagline {
+  margin: 0 0 16px;
+  color: var(--text-2);
+  font-size: 0.95rem;
+}
+
 /* --- History Panel --- */
 
 .history-toggle-btn {

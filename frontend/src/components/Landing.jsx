@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { UserButton } from "@clerk/clerk-react";
 import HistoryPanel from "./HistoryPanel";
 
 const SUGGESTIONS = [
@@ -239,6 +240,9 @@ export default function Landing({ onStart, disabled = false, error = null, sessi
 
   return (
     <>
+      <div className="landing-user-btn">
+        <UserButton afterSignOutUrl="/" />
+      </div>
       <button
         className="landing-theme-btn"
         onClick={onToggleTheme}

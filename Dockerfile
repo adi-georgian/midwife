@@ -8,6 +8,10 @@ WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
+# Clerk's publishable key is public and must be embedded at build time (Vite inlines
+# VITE_* vars). Render supplies it from the service env var of the same name.
+ARG VITE_CLERK_PUBLISHABLE_KEY
+ENV VITE_CLERK_PUBLISHABLE_KEY=$VITE_CLERK_PUBLISHABLE_KEY
 RUN npm run build
 
 # ---- Stage 2: Python runtime ----

@@ -15,6 +15,7 @@ import uuid
 _TMP_DB = pathlib.Path(tempfile.gettempdir()) / "midwife_test.db"
 os.environ["DATABASE_URL"] = f"sqlite:///{_TMP_DB}"
 os.environ.pop("ANTHROPIC_VERTEX_PROJECT_ID", None)  # no real provider needed
+os.environ["CLERK_JWT_ISSUER"] = ""  # force dev auth (no Clerk) so the X-Dev-User-Email header works
 
 import pytest
 from fastapi.testclient import TestClient
