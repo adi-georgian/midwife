@@ -1450,6 +1450,18 @@ body.theme-dark .discourse-node__desc {
   color: var(--text-2);
   font-size: 0.95rem;
 }
+.auth-gate__switch {
+  margin-top: 16px;
+  background: none;
+  border: none;
+  color: var(--text-2);
+  font-size: 0.9rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.auth-gate__switch:hover {
+  color: var(--text-1);
+}
 
 /* --- History Panel --- */
 
