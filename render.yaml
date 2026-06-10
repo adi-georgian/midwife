@@ -31,6 +31,9 @@ services:
         sync: false
       - key: CLERK_JWT_ISSUER
         sync: false
+      # Same publishable key, exposed to the frontend build (Vite inlines it).
+      - key: VITE_CLERK_PUBLISHABLE_KEY
+        sync: false
 
 databases:
   - name: midwife-db
